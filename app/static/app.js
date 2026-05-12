@@ -8,12 +8,8 @@ const CFG_FIELDS = ["map_min_mbar", "map_max_mbar", "temp_min_c", "temp_max_c",
 
 // ---------------- WebSocket ----------------
 
-socket.on("connect", () => {
-  $("conn-status").textContent = "Connecté";
-});
-socket.on("disconnect", () => {
-  $("conn-status").textContent = "Déconnecté…";
-});
+socket.on("connect",    () => $("conn-status").textContent = "Connecté");
+socket.on("disconnect", () => $("conn-status").textContent = "Déconnecté…");
 
 socket.on("config", (cfg) => fillConfig(cfg));
 socket.on("state",  (s)   => updateLive(s));
@@ -23,15 +19,21 @@ function fillConfig(cfg) {
     const el = $("cfg-" + f);
     if (el && cfg[f] !== undefined) el.value = cfg[f];
   });
+  // CAN1 mode toggle
+  const mode = cfg?.can?.can1_mode || "pcm";
+  document.querySelectorAll('input[name="can1_mode"]').forEach(r => {
+    r.checked = (r.value === mode);
+  });
 }
 
 function updateLive(s) {
   $("live-lever").textContent = s.lever || "—";
   $("live-map").textContent   = (s.map_mbar?.toFixed(0) || "—") + " mbar";
+  $("live-mapsrc").textContent = s.map_source_active || "—";
   $("live-temp").textContent  = (s.last_motor09_temp_c?.toFixed(1) || "—") + " °C";
   $("live-byte").textContent  = "0x" + (s.last_motor09_byte || 0).toString(16).toUpperCase().padStart(2, "0");
   $("live-tx").textContent    = s.tx_count;
-  $("live-rxp").textContent   = s.rx_powertrain_count;
+  $("live-rxp").textContent   = s.rx_can1_count;
   $("live-rxc").textContent   = s.rx_cluster_count;
   $("live-mapage").textContent = (s.map_age_s !== null && s.map_age_s !== undefined)
     ? s.map_age_s.toFixed(1) + " s"
@@ -40,6 +42,12 @@ function updateLive(s) {
   const pill = $("mode-pill");
   pill.textContent = s.mode;
   pill.className = "pill pill-" + s.mode.toLowerCase();
+
+  // Reflect actual can1_mode into status text
+  const statusEl = $("can1-status");
+  if (statusEl && s.can1_mode) {
+    statusEl.textContent = "Actif : CAN1 → " + (s.can1_mode === "pcm" ? "PCM" : "Diagnostic");
+  }
 }
 
 // ---------------- Save / Reset ----------------
@@ -76,6 +84,27 @@ $("btn-reset").addEventListener("click", async () => {
     body: JSON.stringify(defaults)
   });
   fillConfig(defaults);
+});
+
+// ---------------- CAN1 mode toggle (hot-applied, no reboot) ----------------
+
+document.querySelectorAll('input[name="can1_mode"]').forEach(radio => {
+  radio.addEventListener("change", async (e) => {
+    const newMode = e.target.value;
+    const r = await fetch("/api/config", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ can: { can1_mode: newMode } })
+    });
+    const data = await r.json();
+    const status = $("can1-status");
+    if (data.ok) {
+      status.textContent = "✓ CAN1 basculé en mode " + (newMode === "pcm" ? "PCM" : "Diagnostic")
+                         + " — branche le câble physique en conséquence.";
+    } else {
+      status.textContent = "Erreur: " + (data.error || "?");
+    }
+  });
 });
 
 // ---------------- Initial fetch ----------------

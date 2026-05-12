@@ -69,14 +69,16 @@ If you see your test frame → HAT is working.
 
 > ⚠️ **Power MUST come from a switched +12V** (ignition-on, key-off = power off). Never tap to permanent battery — Pi will drain it overnight.
 
-| Pi / HAT pin | Vehicle wire (from gateway Y-cable) |
+| Pi / HAT pin | Vehicle wire |
 |---|---|
 | DC-DC 12V in (+) | Ignition-switched fuse (e.g. accessory) via 2 A inline fuse |
 | DC-DC GND | Vehicle chassis GND |
-| HAT CAN0 H | Powertrain CAN-H (gateway) |
-| HAT CAN0 L | Powertrain CAN-L (gateway) |
-| HAT CAN1 H | Cluster CAN-H (gateway) |
-| HAT CAN1 L | Cluster CAN-L (gateway) |
+| **HAT CAN0 H** | **Cluster CAN-H** (gateway Y-cable) |
+| **HAT CAN0 L** | **Cluster CAN-L** (gateway Y-cable) |
+| **HAT CAN1 H** | **PCM CAN-H** (gateway Y-cable) **OR** OBD-II pin 6 |
+| **HAT CAN1 L** | **PCM CAN-L** (gateway Y-cable) **OR** OBD-II pin 14 |
+
+> 💡 **CAN1 dual-purpose** — switch between PCM tap and OBD-II diagnostic port at any time. Physically replug the wires, then change `CAN1 mode` in the web UI to match. No reboot needed.
 
 **⚠️ Termination jumpers** : the WaveShare 2-CH CAN HAT has 120 Ω termination jumpers (`R-CAN0` and `R-CAN1` on the silkscreen). **REMOVE them** before installing in vehicle (the vehicle bus already has terminators — adding more = bus impedance broken = errors).
 

@@ -44,11 +44,22 @@ Vehicle Cluster CAN     ◄─────  Pi writes Motor_09 (0x647)
 
 - **OS**: Raspberry Pi OS Lite (64-bit, no GUI)
 - **Boot mode**: Read-only root (overlayfs) → SD card survives abrupt power-cuts
-- **CAN stack**: SocketCAN kernel driver (`can0` = Powertrain, `can1` = Cluster)
+- **CAN stack**: SocketCAN kernel driver
+  - `can0` = **Cluster CAN** (always)
+  - `can1` = **PCM (Powertrain)** OR **Diagnostic (OBD-II)** — togglable in UI without reboot
 - **App**: Python 3 / Flask + Flask-SocketIO
 - **WiFi**: AP mode by default, SSID `MK7-BoostGauge`, default IP `192.168.4.1`
 - **Auto-start**: systemd service, launched at boot
 - **Persistence**: `/var/lib/boostgauge/config.json` (writable partition only)
+
+### CAN1 toggle behaviour
+
+| Mode | Physical wiring | MAP source (default) | When to use |
+|---|---|---|---|
+| **PCM** | CAN1 tapped on Powertrain CAN at gateway Y-cable | Broadcast sniff (Motor_xx) — fast, low latency | Production install in vehicle |
+| **Diagnostic** | CAN1 plugged into OBD-II J1962 (pin 6 = H, pin 14 = L) | UDS query DID 0x39C0 forced — broadcasts not visible through gateway | Dev / debug / temporary access |
+
+The toggle is hot-applied — change it from the web UI and replug the cable, no reboot.
 
 ## Config (settable in web UI, persisted)
 

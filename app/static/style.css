@@ -79,3 +79,15 @@ footer {
   display: flex; justify-content: space-between; padding: 12px 20px;
   border-top: 1px solid var(--border); margin-top: 20px;
 }
+
+.small { font-size: 12px; }
+
+.toggle-group { display: flex; gap: 10px; margin-top: 8px; }
+.toggle-opt {
+  flex: 1; display: flex; align-items: flex-start; gap: 10px;
+  background: #131820; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; cursor: pointer; transition: border-color 0.15s;
+}
+.toggle-opt:has(input:checked) { border-color: var(--accent); background: #1a2332; }
+.toggle-opt input { margin-top: 4px; accent-color: var(--accent); }
+.toggle-label { line-height: 1.4; }

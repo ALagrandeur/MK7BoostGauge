@@ -20,13 +20,30 @@
     <div class="grid-live">
       <div><span class="lbl">Levier</span><span id="live-lever">—</span></div>
       <div><span class="lbl">MAP</span><span id="live-map">— mbar</span></div>
+      <div><span class="lbl">MAP source</span><span id="live-mapsrc">—</span></div>
       <div><span class="lbl">Coolant aff.</span><span id="live-temp">— °C</span></div>
       <div><span class="lbl">Motor_09 byte</span><span id="live-byte">0x—</span></div>
       <div><span class="lbl">TX cluster</span><span id="live-tx">0</span></div>
-      <div><span class="lbl">RX powertrain</span><span id="live-rxp">0</span></div>
       <div><span class="lbl">RX cluster</span><span id="live-rxc">0</span></div>
+      <div><span class="lbl">RX can1</span><span id="live-rxp">0</span></div>
       <div><span class="lbl">MAP age</span><span id="live-mapage">— s</span></div>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>CAN — branchement</h2>
+    <p class="muted small">CAN0 = toujours câblé au <b>Cluster</b>. CAN1 = bascule entre <b>PCM</b> (tap Powertrain direct) ou <b>Diagnostic</b> (port OBD-II).</p>
+    <div class="toggle-group">
+      <label class="toggle-opt">
+        <input type="radio" name="can1_mode" value="pcm">
+        <span class="toggle-label"><b>CAN1 → PCM</b><br><span class="small muted">Tap Powertrain. Sniff broadcasts + UDS.</span></span>
+      </label>
+      <label class="toggle-opt">
+        <input type="radio" name="can1_mode" value="diagnostic">
+        <span class="toggle-label"><b>CAN1 → Diagnostic</b><br><span class="small muted">Port OBD-II. UDS query forcée.</span></span>
+      </label>
+    </div>
+    <div id="can1-status" class="muted small"></div>
   </section>
 
   <section class="card">

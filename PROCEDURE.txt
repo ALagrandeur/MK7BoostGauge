@@ -200,18 +200,43 @@ ETAPE 8 - INSTALLATION DANS LA VOITURE
 ----------------------------------------------------------------
 
 PRE-REQUIS : avoir le Y-cable extension gateway en main, identifier
-les bonnes paires CAN (Powertrain + Cluster) avec multimetre :
+les bonnes paires CAN (Cluster + PCM) avec multimetre :
    - Resistance ~60 Ohms entre H et L = c'est une paire CAN active
 
-Cablage :
+Cablage (assignation OFFICIELLE) :
 
    +12V auto (ignition switched, fusible 2A) -> DC-DC IN+
    GND chassis voiture                       -> DC-DC IN-
 
    DC-DC OUT (5V USB-C)                      -> Pi USB-C PWR
 
-   HAT CAN0 H/L  -> Y-cable Powertrain CAN-H/L
-   HAT CAN1 H/L  -> Y-cable Cluster CAN-H/L
+   HAT CAN0 H/L  -> Y-cable Cluster CAN-H/L      (TOUJOURS cluster)
+   HAT CAN1 H/L  -> Y-cable PCM CAN-H/L          (mode normal)
+                    OU
+                    Port OBD-II pin 6 / pin 14   (mode diagnostique)
+
+LE TOGGLE CAN1 :
+
+Dans l'interface web, section "CAN - branchement", tu peux basculer
+CAN1 entre 2 modes sans rebooter :
+
+   - CAN1 -> PCM         : tap direct Powertrain via Y-cable.
+                            Mode rapide (sniff broadcasts).
+                            A utiliser pour install permanente.
+
+   - CAN1 -> Diagnostic  : connexion port OBD-II J1962 (pinout standard).
+                            Pin 6  = CAN-H
+                            Pin 14 = CAN-L
+                            Mode UDS query forcee (gateway filtre les
+                            broadcasts vers le port OBD).
+                            A utiliser pour debug / acces temporaire
+                            sans demonter le tableau de bord.
+
+Pour basculer :
+   1. Debrancher la prise CAN1 du Y-cable (ou du OBD-II)
+   2. Brancher sur l'autre source physique
+   3. Dans l'UI web -> cocher le bon mode (PCM ou Diagnostic)
+   4. Sauvegarder
 
 ATTENTION : NE JAMAIS brancher sur batterie permanente (le Pi va
             decharger la batterie en 2-3 jours). TOUJOURS sur fusible

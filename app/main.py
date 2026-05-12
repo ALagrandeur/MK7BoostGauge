@@ -24,8 +24,8 @@ def main() -> int:
     log.info("Config loaded: %s", cfg.data)
 
     can_mgr = CanManager(
-        powertrain_iface=cfg["can"]["powertrain_iface"],
         cluster_iface=cfg["can"]["cluster_iface"],
+        can1_iface=cfg["can"]["can1_iface"],
         bitrate=cfg["can"]["bitrate"],
         forbidden_ids=set(cfg["safety"]["forbidden_can_ids"]),
     )

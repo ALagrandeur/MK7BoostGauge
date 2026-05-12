@@ -1,4 +1,10 @@
-"""Dual-channel CAN manager — wraps python-can SocketCAN with safety blocklist."""
+"""Dual-channel CAN manager — wraps python-can SocketCAN with safety blocklist.
+
+Channels:
+  'cluster' = always wired to Cluster CAN bus (CAN0 by physical convention)
+  'can1'    = wired to either PCM (Powertrain) or Diagnostic (OBD-II) bus,
+              depending on user toggle in config.
+"""
 from __future__ import annotations
 
 import logging
@@ -14,10 +20,12 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+CHANNELS = ("cluster", "can1")
+
 
 class CanManager:
     """
-    Manages two SocketCAN interfaces (powertrain + cluster), with:
+    Manages two SocketCAN interfaces, with:
     - Hard safety blocklist on TX (forbidden_ids never leave the device)
     - Per-channel listener registration
     - Stub mode if python-can not installed (dev on Windows)
@@ -25,20 +33,17 @@ class CanManager:
 
     def __init__(
         self,
-        powertrain_iface: str,
         cluster_iface: str,
+        can1_iface: str,
         bitrate: int = 500_000,
         forbidden_ids: Optional[set[int]] = None,
     ) -> None:
-        self.powertrain_iface = powertrain_iface
-        self.cluster_iface = cluster_iface
+        self.iface = {"cluster": cluster_iface, "can1": can1_iface}
         self.bitrate = bitrate
         self.forbidden_ids = forbidden_ids or set()
 
-        self.bus_powertrain: Optional["can.BusABC"] = None
-        self.bus_cluster: Optional["can.BusABC"] = None
-
-        self._listeners: dict[str, list[Callable]] = {"powertrain": [], "cluster": []}
+        self.bus: dict[str, Optional["can.BusABC"]] = {"cluster": None, "can1": None}
+        self._listeners: dict[str, list[Callable]] = {ch: [] for ch in CHANNELS}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
 
@@ -48,64 +53,52 @@ class CanManager:
         if not HAVE_PYTHON_CAN:
             log.warning("python-can not installed — CanManager running in STUB mode")
             return
-        try:
-            self.bus_powertrain = can.interface.Bus(
-                channel=self.powertrain_iface, interface="socketcan", bitrate=self.bitrate
-            )
-            log.info("Opened Powertrain CAN on %s", self.powertrain_iface)
-        except Exception as e:
-            log.error("Failed to open powertrain CAN %s: %s", self.powertrain_iface, e)
-            self.bus_powertrain = None
-        try:
-            self.bus_cluster = can.interface.Bus(
-                channel=self.cluster_iface, interface="socketcan", bitrate=self.bitrate
-            )
-            log.info("Opened Cluster CAN on %s", self.cluster_iface)
-        except Exception as e:
-            log.error("Failed to open cluster CAN %s: %s", self.cluster_iface, e)
-            self.bus_cluster = None
+        for ch in CHANNELS:
+            try:
+                self.bus[ch] = can.interface.Bus(
+                    channel=self.iface[ch], interface="socketcan", bitrate=self.bitrate
+                )
+                log.info("Opened %s CAN on %s", ch, self.iface[ch])
+            except Exception as e:
+                log.error("Failed to open %s CAN %s: %s", ch, self.iface[ch], e)
+                self.bus[ch] = None
 
-        # Spawn RX threads
-        if self.bus_powertrain:
-            t = threading.Thread(
-                target=self._rx_loop, args=("powertrain", self.bus_powertrain), daemon=True
-            )
-            t.start()
-            self._threads.append(t)
-        if self.bus_cluster:
-            t = threading.Thread(
-                target=self._rx_loop, args=("cluster", self.bus_cluster), daemon=True
-            )
-            t.start()
-            self._threads.append(t)
+        for ch in CHANNELS:
+            if self.bus[ch] is not None:
+                t = threading.Thread(
+                    target=self._rx_loop, args=(ch, self.bus[ch]), daemon=True,
+                    name=f"CanRx-{ch}",
+                )
+                t.start()
+                self._threads.append(t)
 
     # ------------------------------------------------------------------ close
 
     def close(self) -> None:
         self._stop.set()
-        for bus in (self.bus_powertrain, self.bus_cluster):
-            if bus:
+        for ch in CHANNELS:
+            if self.bus[ch] is not None:
                 try:
-                    bus.shutdown()
+                    self.bus[ch].shutdown()
                 except Exception:
                     pass
 
     # ------------------------------------------------------------------ TX
 
     def send(self, channel: str, can_id: int, data: bytes, extended: bool = False) -> bool:
-        """Send a frame on a named channel ('powertrain' or 'cluster').
+        """Send a frame on a named channel ('cluster' or 'can1').
 
         Returns True on success, False if blocked by safety or send failed.
         """
+        if channel not in CHANNELS:
+            log.error("Unknown channel '%s'", channel)
+            return False
         if can_id in self.forbidden_ids:
             log.warning("BLOCKED forbidden TX id 0x%X on %s", can_id, channel)
             return False
 
-        bus = self.bus_powertrain if channel == "powertrain" else self.bus_cluster
-        if bus is None:
-            return False
-
-        if not HAVE_PYTHON_CAN:
+        bus = self.bus[channel]
+        if bus is None or not HAVE_PYTHON_CAN:
             return False
 
         msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=extended)
@@ -123,6 +116,9 @@ class CanManager:
 
         Callback signature: (can_id: int, data: bytes, timestamp: float) -> None
         """
+        if channel not in CHANNELS:
+            log.error("Unknown channel '%s' for listener", channel)
+            return
         self._listeners[channel].append(callback)
 
     def _rx_loop(self, channel: str, bus: "can.BusABC") -> None:

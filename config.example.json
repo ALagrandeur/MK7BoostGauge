@@ -1,6 +1,6 @@
 {
   "_comment": "MK7BoostGauge config. Copy to /var/lib/boostgauge/config.json on Pi. Editable via web UI.",
-  "_version": 1,
+  "_version": 2,
 
   "map_min_mbar": 300,
   "map_max_mbar": 2500,
@@ -11,11 +11,18 @@
   "tx_rate_hz": 25,
 
   "can": {
-    "powertrain_iface": "can0",
-    "cluster_iface":    "can1",
+    "_comment": "CAN0 = always Cluster bus. CAN1 = either PCM (Powertrain) or Diagnostic (OBD-II) — togglable in UI without rebooting.",
+
+    "cluster_iface": "can0",
+    "can1_iface":    "can1",
+    "can1_mode":     "pcm",
+    "_can1_mode_choices": ["pcm", "diagnostic"],
+
     "bitrate":          500000,
-    "map_source":       "uds",
-    "_map_source_choices": ["uds", "broadcast"],
+    "map_source":       "auto",
+    "_map_source_choices": ["auto", "broadcast", "uds"],
+    "_map_source_help":  "auto = sniff if PCM mode, UDS if Diagnostic. broadcast = sniff only. uds = query only.",
+
     "uds_did_map":      "0x39C0",
     "uds_engine_req":   "0x7E0",
     "uds_engine_resp":  "0x7E8",
@@ -32,6 +39,6 @@
 
   "safety": {
     "forbidden_can_ids": ["0x040", "0x572", "0x585"],
-    "_comment": "Hard-block list at can_manager send level — same philosophy as bench controller. Airbag IDs blacklisted no matter what."
+    "_comment": "Hard-block list at can_manager send level. Airbag IDs blacklisted no matter what."
   }
 }
