@@ -1,0 +1,37 @@
+{
+  "_comment": "MK7BoostGauge config. Copy to /var/lib/boostgauge/config.json on Pi. Editable via web UI.",
+  "_version": 1,
+
+  "map_min_mbar": 300,
+  "map_max_mbar": 2500,
+  "temp_min_c": 50,
+  "temp_max_c": 130,
+  "scale": 1.0,
+  "offset_c": 0,
+  "tx_rate_hz": 25,
+
+  "can": {
+    "powertrain_iface": "can0",
+    "cluster_iface":    "can1",
+    "bitrate":          500000,
+    "map_source":       "uds",
+    "_map_source_choices": ["uds", "broadcast"],
+    "uds_did_map":      "0x39C0",
+    "uds_engine_req":   "0x7E0",
+    "uds_engine_resp":  "0x7E8",
+    "uds_query_rate_hz": 10
+  },
+
+  "wifi": {
+    "mode":        "ap",
+    "_mode_choices": ["ap", "sta"],
+    "ap_ssid":     "MK7-BoostGauge",
+    "ap_password": "boostgauge",
+    "ap_channel":  6
+  },
+
+  "safety": {
+    "forbidden_can_ids": ["0x040", "0x572", "0x585"],
+    "_comment": "Hard-block list at can_manager send level — same philosophy as bench controller. Airbag IDs blacklisted no matter what."
+  }
+}

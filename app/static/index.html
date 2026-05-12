@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MK7BoostGauge</title>
+<link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body>
+
+<header>
+  <h1>MK7BoostGauge</h1>
+  <div id="mode-pill" class="pill pill-waiting">WAITING</div>
+</header>
+
+<main>
+
+  <section class="card">
+    <h2>État live</h2>
+    <div class="grid-live">
+      <div><span class="lbl">Levier</span><span id="live-lever">—</span></div>
+      <div><span class="lbl">MAP</span><span id="live-map">— mbar</span></div>
+      <div><span class="lbl">Coolant aff.</span><span id="live-temp">— °C</span></div>
+      <div><span class="lbl">Motor_09 byte</span><span id="live-byte">0x—</span></div>
+      <div><span class="lbl">TX cluster</span><span id="live-tx">0</span></div>
+      <div><span class="lbl">RX powertrain</span><span id="live-rxp">0</span></div>
+      <div><span class="lbl">RX cluster</span><span id="live-rxc">0</span></div>
+      <div><span class="lbl">MAP age</span><span id="live-mapage">— s</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Configuration mapping</h2>
+    <div class="row">
+      <label>MAP min (mbar) <input type="number" id="cfg-map_min_mbar" min="0" max="4000" step="10"></label>
+      <label>MAP max (mbar) <input type="number" id="cfg-map_max_mbar" min="0" max="4000" step="10"></label>
+    </div>
+    <div class="row">
+      <label>Temp min (°C) <input type="number" id="cfg-temp_min_c" min="0" max="150" step="1"></label>
+      <label>Temp max (°C) <input type="number" id="cfg-temp_max_c" min="0" max="150" step="1"></label>
+    </div>
+    <div class="row">
+      <label>Scale <input type="number" id="cfg-scale" min="0.1" max="3.0" step="0.05"></label>
+      <label>Offset (°C) <input type="number" id="cfg-offset_c" min="-50" max="50" step="1"></label>
+    </div>
+    <div class="row">
+      <label>TX rate (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1"></label>
+    </div>
+    <div class="actions">
+      <button id="btn-save">💾 Sauvegarder</button>
+      <button id="btn-reset" class="secondary">↺ Reset défauts</button>
+    </div>
+    <div id="save-status" class="muted"></div>
+  </section>
+
+  <section class="card">
+    <h2>Modes</h2>
+    <table class="modes">
+      <thead><tr><th>Levier</th><th>Mode</th><th>Affichage</th></tr></thead>
+      <tbody>
+        <tr><td>S / M / N</td><td class="boost">BOOST</td><td>Pression turbo (mappée)</td></tr>
+        <tr><td>D / P / R</td><td class="temp">TEMP</td><td>Température réelle (gateway forward)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+  <span id="conn-status" class="muted">Connexion…</span>
+  <span class="muted">v0.1 — MK7BoostGauge</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+<script src="/app.js?v=1"></script>
+</body>
+</html>
