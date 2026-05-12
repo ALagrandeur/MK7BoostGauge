@@ -1,0 +1,327 @@
+================================================================
+   MK7BoostGauge - PROCEDURE D'INSTALLATION
+   Pi Zero 2W + WaveShare 2-CH CAN HAT
+================================================================
+
+Repo GitHub : https://github.com/ALagrandeur/MK7BoostGauge
+Date : mai 2026
+
+
+----------------------------------------------------------------
+ETAPE 0 - VERIFIER LE MATERIEL RECU
+----------------------------------------------------------------
+
+Avant de commencer, verifier que tu as :
+
+[ ] Raspberry Pi Zero 2W
+[ ] WaveShare 2-CH CAN HAT (avec 2 modules MCP2515)
+[ ] MicroSD 16 Go (ou plus) Class 10
+[ ] Adaptateur MicroSD vers USB (pour flasher depuis ton PC)
+[ ] Cable USB micro-B (pour alimenter le Pi pendant l'install)
+[ ] DC-DC step-down 12V vers 5V USB-C 3A (pour la voiture, plus tard)
+[ ] Boitier Pi Zero (optionnel mais recommande)
+[ ] 4 vis M2.5 pour fixer le HAT sur le Pi (souvent fournies)
+
+
+----------------------------------------------------------------
+ETAPE 1 - FLASHER LA CARTE MICROSD (sur ton PC Windows)
+----------------------------------------------------------------
+
+1. Telecharger Raspberry Pi Imager :
+   https://www.raspberrypi.com/software/
+
+2. Inserer la MicroSD dans ton PC (avec adaptateur USB)
+
+3. Lancer Raspberry Pi Imager :
+   - Choose Device       : Raspberry Pi Zero 2 W
+   - Choose OS           : Raspberry Pi OS (other) > Raspberry Pi OS Lite (64-bit)
+   - Choose Storage      : ta MicroSD
+
+4. Cliquer "NEXT", puis "EDIT SETTINGS" (icone roue dentee).
+   Onglet "GENERAL" :
+     [x] Set hostname              : boostgauge
+     [x] Set username and password : pi / (mot de passe que tu choisis - NOTE-LE !)
+     [x] Configure wireless LAN    : SSID + password de ton WiFi maison
+                                     (sert UNIQUEMENT pour la 1ere install)
+     [x] Set locale settings       : ton fuseau horaire
+
+   Onglet "SERVICES" :
+     [x] Enable SSH
+     [x] Use password authentication
+
+5. Cliquer "SAVE", puis "YES" pour appliquer, puis "YES" pour ecrire.
+
+6. Attendre la fin (~5 minutes), puis ejecter proprement la MicroSD.
+
+
+----------------------------------------------------------------
+ETAPE 2 - ASSEMBLER LE PI + HAT
+----------------------------------------------------------------
+
+1. Pi NON branche.
+
+2. IMPORTANT : retirer les 2 jumpers de terminaison 120 Ohms du HAT
+   (cherche les marquages "R-CAN0" et "R-CAN1" sur le PCB du HAT)
+   - Sur le bench tu peux les laisser pour test
+   - Pour la voiture il FAUT les enlever (sinon tu desequilibres le bus)
+
+3. Empiler le HAT sur le Pi par les pins GPIO 40 broches.
+   Visser les 4 vis M2.5 pour le fixer.
+
+4. Inserer la MicroSD flashee dans le Pi.
+
+5. Brancher cable USB micro-B sur le port "PWR" du Pi (pas le port USB OTG).
+   Le Pi va booter automatiquement.
+
+
+----------------------------------------------------------------
+ETAPE 3 - PREMIER BOOT + CONNEXION SSH
+----------------------------------------------------------------
+
+1. Attendre 60 secondes apres avoir branche l'alim.
+
+2. Sur ton PC Windows, ouvrir PowerShell ou cmd, taper :
+
+   ssh pi@boostgauge.local
+
+   (Si "boostgauge.local" ne marche pas, trouve l'IP du Pi sur la page
+    admin de ton routeur et utilise : ssh pi@192.168.X.X )
+
+3. Quand demande, taper "yes" pour accepter la cle, puis le mot de passe
+   que tu as defini a l'etape 1.
+
+4. Tu es maintenant en SSH sur le Pi. Le prompt devrait ressembler a :
+   pi@boostgauge:~ $
+
+
+----------------------------------------------------------------
+ETAPE 4 - INSTALLER MK7BoostGauge
+----------------------------------------------------------------
+
+Coller ces commandes une par une sur le Pi (en SSH) :
+
+   sudo apt update
+   sudo apt -y full-upgrade
+   sudo apt -y install git
+
+   git clone https://github.com/ALagrandeur/MK7BoostGauge.git
+   cd MK7BoostGauge
+   sudo bash pi_setup/setup.sh
+
+L'install va prendre 5 a 10 minutes (telecharge dependances Python,
+configure les overlays CAN, cree le service systemd).
+
+Quand c'est fini, tu vas voir :
+   "==> [8/8] Done!"
+
+Faire un reboot :
+
+   sudo reboot
+
+Attendre 60 secondes, puis SSH a nouveau :
+
+   ssh pi@boostgauge.local
+
+
+----------------------------------------------------------------
+ETAPE 5 - VERIFIER QUE TOUT FONCTIONNE
+----------------------------------------------------------------
+
+Sur le Pi (SSH) :
+
+1. Verifier que les 2 interfaces CAN sont visibles :
+
+   ip -br link show | grep can
+
+   Tu devrais voir :
+     can0   UP   <NOARP,UP,LOWER_UP,ECHO>
+     can1   UP   <NOARP,UP,LOWER_UP,ECHO>
+
+   Si tu ne vois rien : reboot encore (parfois 2 reboots necessaires).
+   Si toujours rien : verifier que le HAT est bien empile et les vis serrees.
+
+2. Verifier que le service tourne :
+
+   systemctl status boostgauge
+
+   Doit afficher : "active (running)" en vert.
+
+3. Voir les logs en temps reel :
+
+   journalctl -u boostgauge -f
+   (Ctrl+C pour quitter)
+
+
+----------------------------------------------------------------
+ETAPE 6 - TEST CAN SUR LE BENCH (optionnel mais recommande)
+----------------------------------------------------------------
+
+1. Brancher le HAT au cluster sur ton bench (CAN0 ou CAN1) :
+     HAT CAN-H -> Cluster CAN-H (pin 17 du connecteur 18-broches cluster)
+     HAT CAN-L -> Cluster CAN-L (pin 18)
+     Pi GND     -> Cluster GND  (pin 10)
+
+2. Ouvrir le navigateur sur ton PC :
+     http://boostgauge.local
+     ou
+     http://192.168.X.X (l'IP du Pi)
+
+3. Tu devrais voir l'interface MK7BoostGauge avec :
+     - Pill "WAITING" en haut (jaune)
+     - Cards "Etat live" + "Configuration mapping" + "Modes"
+
+4. Sur le bench, comme il n'y a pas de WBA_03 (gear) envoye, le mode
+   restera "WAITING" (pas de TX). C'est normal sans signal levier.
+
+5. Pour tester un envoi force, tu peux temporairement modifier le code
+   ou attendre la voiture.
+
+
+----------------------------------------------------------------
+ETAPE 7 - CONFIGURER LE WIFI AP (pour la voiture)
+----------------------------------------------------------------
+
+Une fois que tout marche en mode WiFi maison, on bascule en AP autonome :
+
+   sudo bash pi_setup/ap_setup.sh
+   sudo reboot
+
+Apres reboot, le Pi cree son propre WiFi :
+     SSID     : MK7-BoostGauge
+     Password : boostgauge
+     IP Pi    : 192.168.4.1
+
+Connecte-toi a ce WiFi avec ton telephone, va sur :
+     http://192.168.4.1
+
+
+----------------------------------------------------------------
+ETAPE 8 - INSTALLATION DANS LA VOITURE
+----------------------------------------------------------------
+
+PRE-REQUIS : avoir le Y-cable extension gateway en main, identifier
+les bonnes paires CAN (Powertrain + Cluster) avec multimetre :
+   - Resistance ~60 Ohms entre H et L = c'est une paire CAN active
+
+Cablage :
+
+   +12V auto (ignition switched, fusible 2A) -> DC-DC IN+
+   GND chassis voiture                       -> DC-DC IN-
+
+   DC-DC OUT (5V USB-C)                      -> Pi USB-C PWR
+
+   HAT CAN0 H/L  -> Y-cable Powertrain CAN-H/L
+   HAT CAN1 H/L  -> Y-cable Cluster CAN-H/L
+
+ATTENTION : NE JAMAIS brancher sur batterie permanente (le Pi va
+            decharger la batterie en 2-3 jours). TOUJOURS sur fusible
+            qui se coupe avec le contact.
+
+
+----------------------------------------------------------------
+ETAPE 9 - PREMIER ESSAI VOITURE
+----------------------------------------------------------------
+
+1. Mettre le contact (cle ON, sans demarrer)
+2. Attendre 30-45 secondes (boot du Pi)
+3. Sur ton telephone, connexion au WiFi "MK7-BoostGauge"
+4. Ouvrir http://192.168.4.1
+5. La pill devrait passer de "WAITING" a "TEMP" (levier en P)
+6. Demarrer le moteur
+7. Bouger le levier en S -> pill passe a "BOOST", l'aiguille suit la MAP
+
+Si ca ne marche pas, en SSH (depuis ton telephone via app Termux ou
+ton PC en se connectant au WiFi de la voiture) :
+
+   journalctl -u boostgauge -n 50
+
+Pour voir les 50 dernieres lignes de log.
+
+
+----------------------------------------------------------------
+ETAPE 10 - CALIBRATION
+----------------------------------------------------------------
+
+Dans l'interface web, ajuster les sliders :
+
+   MAP min (mbar)    : valeur MAP a vide moteur tournant idle (~300)
+   MAP max (mbar)    : valeur MAP a fond boost (~2500 sur Alltrack)
+   Temp min (C)      : 50 (aiguille en bas)
+   Temp max (C)      : 130 (aiguille dans le rouge)
+   Scale             : 1.0 (laisser, ajuster si non lineaire)
+   Offset (C)        : 0  (laisser sauf si decalage visible)
+   TX rate (Hz)      : 25 (monter a 35-40 si flicker visible)
+
+Cliquer "Sauvegarder" - la config persiste apres reboot.
+
+
+----------------------------------------------------------------
+COMMANDES UTILES
+----------------------------------------------------------------
+
+Voir les logs en direct :
+   journalctl -u boostgauge -f
+
+Redemarrer le service (sans rebooter le Pi) :
+   sudo systemctl restart boostgauge
+
+Mettre a jour le code depuis GitHub :
+   cd ~/MK7BoostGauge
+   git pull
+   sudo systemctl restart boostgauge
+
+Voir les frames CAN en direct sur le bus Powertrain :
+   candump can0
+
+Voir les frames CAN en direct sur le bus Cluster :
+   candump can1
+
+Envoyer une frame de test sur Cluster :
+   cansend can1 647#80FDFF7F000000C1
+
+Editer la config a la main :
+   sudo nano /var/lib/boostgauge/config.json
+   sudo systemctl restart boostgauge
+
+
+----------------------------------------------------------------
+EN CAS DE PROBLEME
+----------------------------------------------------------------
+
+Probleme : "ssh: Could not resolve hostname boostgauge.local"
+Solution : trouve l'IP du Pi via le routeur, utilise l'IP
+
+Probleme : "ip link" ne montre pas can0/can1
+Solution : verifier /boot/firmware/config.txt contient bien les overlays
+           dtoverlay=mcp2515-can0,...
+           dtoverlay=mcp2515-can1,...
+           sinon relancer : sudo bash pi_setup/setup.sh
+           puis : sudo reboot
+
+Probleme : Service crash au boot (status "failed")
+Solution : voir les logs : journalctl -u boostgauge -n 100
+           probable : python-can manque, refaire pip install dans venv
+
+Probleme : Pas de reponse du cluster (aiguille ne bouge pas)
+Solution : verifier candump can1 - tu dois voir l'ID 0x394 arriver
+           si vide, le cable cluster est mal branche
+           si 0x394 arrive mais aiguille bouge pas, verifier
+           que tu envoies bien Motor_09 (0x647) en mode S/M/N
+
+Probleme : Aiguille flicker trop
+Solution : monter TX rate Hz a 35 ou 40 dans l'interface web
+
+Probleme : SD card corrompue apres coupure brutale
+Solution : reflasher la SD, puis activer overlayfs read-only
+           (script a venir, demande-moi quand pret)
+
+
+----------------------------------------------------------------
+SUPPORT
+----------------------------------------------------------------
+
+Repo GitHub  : https://github.com/ALagrandeur/MK7BoostGauge
+Issues       : https://github.com/ALagrandeur/MK7BoostGauge/issues
+Sister repo  : https://github.com/ALagrandeur/mk7-cluster-bench-controller
+
+Bon montage !
