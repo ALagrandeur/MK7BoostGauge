@@ -24,6 +24,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "scale": 1.0,
     "offset_c": 0,
     "tx_rate_hz": 25,
+    "formula": "linear",   # "linear" | "exp" | "sqrt"
     "can": {
         "cluster_iface": "can0",
         "can1_iface": "can1",

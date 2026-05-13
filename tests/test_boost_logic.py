@@ -132,3 +132,49 @@ def test_map_mapping_div_zero_safe():
         temp_min_c=50, temp_max_c=130,
     )
     assert b == temp_c_to_motor09_byte(90)
+
+
+# ---------------- Formula choice ----------------
+
+def test_formula_linear_default_matches_explicit():
+    args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130)
+    b_default = map_mbar_to_motor09_byte(**args)
+    b_linear  = map_mbar_to_motor09_byte(**args, formula="linear")
+    assert b_default == b_linear
+
+
+def test_formula_exp_at_top_matches_linear_at_top():
+    """At MAP_max, all formulas should converge to temp_max byte."""
+    args = dict(map_mbar=2500, map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130)
+    b_lin = map_mbar_to_motor09_byte(**args, formula="linear")
+    b_exp = map_mbar_to_motor09_byte(**args, formula="exp")
+    b_sqrt = map_mbar_to_motor09_byte(**args, formula="sqrt")
+    assert b_lin == b_exp == b_sqrt
+
+
+def test_formula_exp_lower_than_linear_at_midpoint():
+    """Exp curve: at MAP midpoint, output should be LOWER than linear (still ramping)."""
+    args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130)
+    b_lin = map_mbar_to_motor09_byte(**args, formula="linear")
+    b_exp = map_mbar_to_motor09_byte(**args, formula="exp")
+    assert b_exp < b_lin
+
+
+def test_formula_sqrt_higher_than_linear_at_midpoint():
+    """Sqrt curve: at MAP midpoint, output should be HIGHER than linear."""
+    args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130)
+    b_lin = map_mbar_to_motor09_byte(**args, formula="linear")
+    b_sqrt = map_mbar_to_motor09_byte(**args, formula="sqrt")
+    assert b_sqrt > b_lin
+
+
+def test_unknown_formula_falls_back_to_linear():
+    args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130)
+    b_lin = map_mbar_to_motor09_byte(**args, formula="linear")
+    b_garbage = map_mbar_to_motor09_byte(**args, formula="nonexistent")
+    assert b_lin == b_garbage

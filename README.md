@@ -105,6 +105,14 @@ and want zero risk of injecting traffic on the wrong network.
 | `offset_c` | 0 | -50 to +50 | °C added after mapping |
 | `tx_rate_hz` | 25 | 5–50 | Frame rate of Motor_09 broadcast |
 
+## Functional scope per channel (v0.2)
+
+| Channel | Direction | Function |
+|---|---|---|
+| **CAN0 (Cluster)** | TX only | Drive cluster temperature needle via Motor_09 (0x647). Configurable: MAP min/max, Temp min/max, scale, offset, formula (linear/exp/sqrt), TX rate Hz |
+| **CAN1 PCM mode** | **RX only** (hardcoded, RX-locked) | Decode broadcast: live MAP, real coolant temp, Haldex demand % |
+| **CAN1 Diagnostic mode** | RX + TX | OBD2 tool: UDS query MAP (DID 0x39C0), real coolant (DID 0x202C), read DTCs (service 0x19), clear DTCs (service 0x14) |
+
 ## Conditional gear logic
 
 | Lever position | Mode | Gauge displays | Pi action |

@@ -12,6 +12,8 @@ from .config import Config
 from .vw_signals import (
     BOOST_LEVERS, MOTOR_09_ID, build_motor_09, decode_lever, is_boost_mode,
     map_mbar_to_motor09_byte, motor09_byte_to_temp_c,
+    MAP_PCM_DECODER, REAL_COOLANT_PCM_DECODER, HALDEX_DEMAND_PCM_DECODER,
+    decode_pcm_broadcast,
 )
 
 log = logging.getLogger(__name__)
@@ -19,9 +21,8 @@ log = logging.getLogger(__name__)
 # CAN IDs we care about
 WBA_03_ID = 0x394   # gear lever, on cluster CAN
 
-# Powertrain CAN IDs to sniff for MAP (TBD — pending user's Powertrain capture).
-# Likely candidates from openDBC vw_mqb_2010.dbc: Motor_05/06/07.
-POWERTRAIN_MAP_CANDIDATE_IDS = {0x130, 0x288, 0x640}
+# PCM broadcast IDs/decoders are now defined in vw_signals.py
+# (MAP_PCM_DECODER, REAL_COOLANT_PCM_DECODER, HALDEX_DEMAND_PCM_DECODER)
 
 # Channel name shortcuts (must match CanManager.CHANNELS)
 CH_CLUSTER = "cluster"
@@ -43,9 +44,20 @@ class BoostState:
     lever_last_seen_ts: float = 0.0
     can1_mode: str = "pcm"
     can1_listen_only: bool = False
+    # PCM live data (decoded from broadcasts when can1_mode='pcm')
+    pcm_map_mbar: Optional[float] = None
+    pcm_coolant_real_c: Optional[float] = None
+    pcm_haldex_demand_pct: Optional[float] = None
+    pcm_map_age_s: float = 0.0
+    pcm_coolant_age_s: float = 0.0
+    pcm_haldex_age_s: float = 0.0
+    pcm_last_map_ts: float = 0.0
+    pcm_last_coolant_ts: float = 0.0
+    pcm_last_haldex_ts: float = 0.0
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def snapshot(self) -> dict:
+        now = time.time()
         with self.lock:
             return {
                 "lever": self.lever,
@@ -57,10 +69,17 @@ class BoostState:
                 "tx_count": self.tx_count,
                 "rx_cluster_count": self.rx_cluster_count,
                 "rx_can1_count": self.rx_can1_count,
-                "map_age_s": round(time.time() - self.map_last_seen_ts, 1) if self.map_last_seen_ts else None,
-                "lever_age_s": round(time.time() - self.lever_last_seen_ts, 1) if self.lever_last_seen_ts else None,
+                "map_age_s": round(now - self.map_last_seen_ts, 1) if self.map_last_seen_ts else None,
+                "lever_age_s": round(now - self.lever_last_seen_ts, 1) if self.lever_last_seen_ts else None,
                 "can1_mode": self.can1_mode,
                 "can1_listen_only": self.can1_listen_only,
+                # PCM live data
+                "pcm_map_mbar": round(self.pcm_map_mbar, 1) if self.pcm_map_mbar is not None else None,
+                "pcm_coolant_real_c": round(self.pcm_coolant_real_c, 1) if self.pcm_coolant_real_c is not None else None,
+                "pcm_haldex_demand_pct": round(self.pcm_haldex_demand_pct, 1) if self.pcm_haldex_demand_pct is not None else None,
+                "pcm_map_age_s": round(now - self.pcm_last_map_ts, 1) if self.pcm_last_map_ts else None,
+                "pcm_coolant_age_s": round(now - self.pcm_last_coolant_ts, 1) if self.pcm_last_coolant_ts else None,
+                "pcm_haldex_age_s": round(now - self.pcm_last_haldex_ts, 1) if self.pcm_last_haldex_ts else None,
             }
 
 
@@ -72,6 +91,20 @@ class BoostController:
         self.state.can1_mode = config["can"].get("can1_mode", "pcm")
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        # OBD2 UDS client — lazily created (only used in Diagnostic mode)
+        self._uds_client = None
+
+    def get_uds_client(self):
+        """Lazy-create a UdsClient (will be no-op if CAN1 is in PCM/listen-only)."""
+        if self._uds_client is None:
+            from .uds import UdsClient
+            self._uds_client = UdsClient(
+                self.can,
+                channel=CH_CAN1,
+                req_id=self.config["can"]["uds_engine_req"],
+                resp_id=self.config["can"]["uds_engine_resp"],
+            )
+        return self._uds_client
 
     # ------------------------------------------------------------------ start
 
@@ -100,27 +133,30 @@ class BoostController:
     def _effective_map_source(self) -> str:
         """Decide actual MAP source given config + can1 mode + listen-only safety.
 
-        - listen_only=True → 'broadcast' (no TX possible, so UDS impossible — only sniff)
-        - source=broadcast → broadcast (only meaningful in PCM mode)
-        - source=uds       → uds
-        - source=auto      → broadcast in PCM mode, uds in Diagnostic mode
+        - PCM mode             → always 'broadcast' (PCM is RX-only, can't query)
+        - Diagnostic + UDS     → 'uds'
+        - Diagnostic + listen_only → 'broadcast' (no TX allowed)
         """
         cfg_src = self.config["can"].get("map_source", "auto")
         mode = self.config["can"].get("can1_mode", "pcm")
         listen_only = bool(self.config["can"].get("can1_listen_only", False))
-        # Hot-update state mirror
+        # Hot-update state mirrors + CanManager
         with self.state.lock:
             self.state.can1_mode = mode
             self.state.can1_listen_only = listen_only
+        self.can.set_can1_mode(mode)
+        self.can.set_can1_listen_only(listen_only)
 
+        if mode == "pcm":
+            return "broadcast"
+        # Diagnostic mode below
         if listen_only:
-            # Can't query UDS → force broadcast attempt (will be no-op until ID identified)
             return "broadcast"
         if cfg_src == "broadcast":
             return "broadcast"
         if cfg_src == "uds":
             return "uds"
-        return "broadcast" if mode == "pcm" else "uds"
+        return "uds"  # auto in Diagnostic → UDS
 
     # ------------------------------------------------------------ RX cluster
 
@@ -142,16 +178,34 @@ class BoostController:
         with self.state.lock:
             self.state.rx_can1_count += 1
 
-        # UDS positive response handler — works on both PCM and Diagnostic
+        # UDS positive response handler — only relevant when in Diagnostic mode
         if can_id == self.config["can"]["uds_engine_resp"]:
             self._handle_uds_response(data, ts)
+            # Also consumed by UdsClient via its own listener if present
             return
 
-        # Broadcast sniff (only meaningful in PCM mode)
-        if self._effective_map_source() == "broadcast" and can_id in POWERTRAIN_MAP_CANDIDATE_IDS:
-            # TODO: identify exact byte offset for MAP from user's Powertrain capture.
-            # Placeholder — currently does nothing until ID/byte known.
-            pass
+        # PCM mode broadcast decoders
+        if self.state.can1_mode == "pcm":
+            v = decode_pcm_broadcast(can_id, data, MAP_PCM_DECODER)
+            if v is not None:
+                with self.state.lock:
+                    self.state.pcm_map_mbar = v
+                    self.state.pcm_last_map_ts = ts
+                    self.state.map_mbar = v       # also feed boost gauge
+                    self.state.map_last_seen_ts = ts
+                    self.state.map_source_active = "broadcast"
+
+            v = decode_pcm_broadcast(can_id, data, REAL_COOLANT_PCM_DECODER)
+            if v is not None:
+                with self.state.lock:
+                    self.state.pcm_coolant_real_c = v
+                    self.state.pcm_last_coolant_ts = ts
+
+            v = decode_pcm_broadcast(can_id, data, HALDEX_DEMAND_PCM_DECODER)
+            if v is not None:
+                with self.state.lock:
+                    self.state.pcm_haldex_demand_pct = v
+                    self.state.pcm_last_haldex_ts = ts
 
     def _handle_uds_response(self, data: bytes, ts: float) -> None:
         """Decode a UDS positive ReadDataByIdentifier response on 0x7E8.
@@ -212,6 +266,7 @@ class BoostController:
                 temp_max_c=cfg["temp_max_c"],
                 scale=cfg.get("scale", 1.0),
                 offset_c=cfg.get("offset_c", 0),
+                formula=cfg.get("formula", "linear"),
             )
             payload = build_motor_09(byte0)
             ok = self.can.send(CH_CLUSTER, MOTOR_09_ID, payload)

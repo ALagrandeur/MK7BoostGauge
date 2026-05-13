@@ -38,32 +38,56 @@ class CanManager:
         bitrate: int = 500_000,
         forbidden_ids: Optional[set[int]] = None,
         can1_listen_only: bool = False,
+        can1_mode: str = "pcm",
     ) -> None:
         self.iface = {"cluster": cluster_iface, "can1": can1_iface}
         self.bitrate = bitrate
         self.forbidden_ids = forbidden_ids or set()
-        # SAFETY: when True, every TX on can1 is hard-blocked at this layer
-        # (independent of any logic in boost_logic / webserver above).
+        # SAFETY: TX on can1 is blocked when ANY of these is true:
+        #   - mode == "pcm"          (hardcoded — PCM is always RX-only by design)
+        #   - listen_only == True    (user-armed safety in Diagnostic mode)
         self._can1_listen_only = bool(can1_listen_only)
+        self._can1_mode = can1_mode
 
         self.bus: dict[str, Optional["can.BusABC"]] = {"cluster": None, "can1": None}
         self._listeners: dict[str, list[Callable]] = {ch: [] for ch in CHANNELS}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
-        # Counter for blocked TX events (visible in UI for trust/debug)
+        # Counters for blocked TX events (visible in UI for trust/debug)
         self.blocked_tx_count = 0
         self.blocked_listen_only_count = 0
         self.blocked_forbidden_count = 0
+        self.blocked_pcm_mode_count = 0
 
     def set_can1_listen_only(self, on: bool) -> None:
-        """Hot-update the listen-only flag (called by webserver on toggle change)."""
         if on != self._can1_listen_only:
             log.warning("CAN1 listen-only changed: %s -> %s", self._can1_listen_only, on)
         self._can1_listen_only = bool(on)
 
+    def set_can1_mode(self, mode: str) -> None:
+        if mode != self._can1_mode:
+            log.warning("CAN1 mode changed: %s -> %s", self._can1_mode, mode)
+        self._can1_mode = mode
+
     @property
     def can1_listen_only(self) -> bool:
         return self._can1_listen_only
+
+    @property
+    def can1_mode(self) -> str:
+        return self._can1_mode
+
+    def is_can1_tx_blocked(self) -> tuple[bool, str]:
+        """Single source of truth for whether CAN1 TX is allowed.
+
+        Returns (blocked, reason) so caller / counters / UI can explain why.
+        Order: PCM mode (hardcoded by design) wins over user listen-only switch.
+        """
+        if self._can1_mode == "pcm":
+            return True, "pcm_mode"
+        if self._can1_listen_only:
+            return True, "listen_only"
+        return False, ""
 
     # ------------------------------------------------------------------ open
 
@@ -119,12 +143,18 @@ class CanManager:
             log.warning("BLOCKED forbidden TX id 0x%X on %s (FORBIDDEN_IDS)", can_id, channel)
             return False
 
-        # SAFETY GATE 2: CAN1 listen-only — hard-block ALL TX on can1 when armed
-        if channel == "can1" and self._can1_listen_only:
-            self.blocked_tx_count += 1
-            self.blocked_listen_only_count += 1
-            log.info("BLOCKED TX id 0x%X on can1 (listen-only mode armed)", can_id)
-            return False
+        # SAFETY GATE 2: CAN1 TX blocked (PCM mode hardcoded OR user listen-only)
+        if channel == "can1":
+            blocked, reason = self.is_can1_tx_blocked()
+            if blocked:
+                self.blocked_tx_count += 1
+                if reason == "pcm_mode":
+                    self.blocked_pcm_mode_count += 1
+                    log.info("BLOCKED TX id 0x%X on can1 (PCM mode = RX-only by design)", can_id)
+                else:
+                    self.blocked_listen_only_count += 1
+                    log.info("BLOCKED TX id 0x%X on can1 (listen-only armed)", can_id)
+                return False
 
         bus = self.bus[channel]
         if bus is None or not HAVE_PYTHON_CAN:

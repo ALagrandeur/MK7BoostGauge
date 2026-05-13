@@ -1,4 +1,4 @@
-"""Flask + SocketIO web UI — config + live telemetry."""
+"""Flask + SocketIO web UI — config + live telemetry + OBD2 tool."""
 from __future__ import annotations
 
 import logging
@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO
+
+from .uds import decode_did_coolant_real_c, decode_did_map_mbar
 
 if TYPE_CHECKING:
     from .boost_logic import BoostController
@@ -67,16 +69,70 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
 
     @app.route("/api/reboot", methods=["POST"])
     def api_reboot():
-        # Soft option: only if explicitly enabled
         import os
         os.system("sudo /sbin/reboot")
         return jsonify({"ok": True})
+
+    # ---------------- OBD2 endpoints (Diagnostic mode only) ----------------
+
+    def _reject_if_not_diagnostic():
+        """Helper: returns a JSON error tuple if not in Diagnostic mode."""
+        mode = config["can"].get("can1_mode", "pcm")
+        if mode != "diagnostic":
+            return jsonify({"ok": False,
+                            "error": f"OBD2 tool only available in Diagnostic mode (current: {mode})"}), 400
+        if config["can"].get("can1_listen_only", False):
+            return jsonify({"ok": False,
+                            "error": "CAN1 LISTEN-ONLY armed — disarm first to send UDS queries"}), 400
+        return None
+
+    @app.route("/api/obd2/read_map", methods=["POST"])
+    def api_obd2_read_map():
+        err = _reject_if_not_diagnostic()
+        if err is not None:
+            return err
+        data = controller.get_uds_client().read_data_by_identifier(0x39C0, timeout_s=0.5)
+        if data is None:
+            return jsonify({"ok": False, "error": "no response (timeout or NRC)"}), 504
+        mbar = decode_did_map_mbar(data)
+        return jsonify({"ok": True, "map_mbar": mbar, "raw_hex": data.hex()})
+
+    @app.route("/api/obd2/read_coolant", methods=["POST"])
+    def api_obd2_read_coolant():
+        err = _reject_if_not_diagnostic()
+        if err is not None:
+            return err
+        data = controller.get_uds_client().read_data_by_identifier(0x202C, timeout_s=0.5)
+        if data is None:
+            return jsonify({"ok": False, "error": "no response (timeout or NRC)"}), 504
+        c = decode_did_coolant_real_c(data)
+        return jsonify({"ok": True, "coolant_real_c": c, "raw_hex": data.hex()})
+
+    @app.route("/api/obd2/read_dtcs", methods=["POST"])
+    def api_obd2_read_dtcs():
+        err = _reject_if_not_diagnostic()
+        if err is not None:
+            return err
+        dtcs = controller.get_uds_client().read_dtc_information(timeout_s=1.0)
+        if dtcs is None:
+            return jsonify({"ok": False, "error": "no response (timeout or NRC)"}), 504
+        return jsonify({"ok": True, "count": len(dtcs),
+                        "dtcs": [d.to_dict() for d in dtcs]})
+
+    @app.route("/api/obd2/clear_dtcs", methods=["POST"])
+    def api_obd2_clear_dtcs():
+        err = _reject_if_not_diagnostic()
+        if err is not None:
+            return err
+        ok = controller.get_uds_client().clear_diagnostic_information(timeout_s=2.0)
+        return jsonify({"ok": ok})
 
     # Helper that merges per-iteration BoostState snapshot with CanManager safety counters
     def _full_state() -> dict:
         s = controller.state.snapshot()
         s["blocked_airbag"] = controller.can.blocked_forbidden_count
         s["blocked_listen_only"] = controller.can.blocked_listen_only_count
+        s["blocked_pcm_mode"] = controller.can.blocked_pcm_mode_count
         return s
 
     # ---------------- WebSocket ----------------

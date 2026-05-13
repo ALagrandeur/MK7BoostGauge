@@ -1,6 +1,8 @@
 """VW MQB CAN signal helpers — decode WBA_03 gear, build Motor_09, MQB CRC."""
 from __future__ import annotations
 
+from typing import Optional
+
 # ---------------------------------------------------------------------------
 # Gear lever decode (WBA_03 / 0x394 byte 1 high nibble)
 # ---------------------------------------------------------------------------
@@ -80,6 +82,74 @@ def build_motor_09(coolant_byte: int) -> bytes:
 # Boost mapping — MAP (mbar) → coolant byte
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Powertrain CAN broadcast decoders (PCM listen mode)
+# ---------------------------------------------------------------------------
+# These IDs and offsets are PLACEHOLDERS. Pending user's Powertrain capture
+# (10 sec moteur tournant + idle + accélération) to identify exact:
+#   - MAP_PCM_BROADCAST_ID + byte offset + scaling
+#   - REAL_COOLANT_PCM_BROADCAST_ID + byte offset + scaling
+#   - HALDEX_DEMAND_PCM_BROADCAST_ID + byte offset + scaling
+#
+# Likely candidates from openDBC vw_mqb_2010.dbc:
+#   Motor_05 (0x130) — engine status, possibly MAP
+#   Motor_06 (0x288) — common MAP location
+#   Motor_07 (0x640) — engine temperatures (intake, oil, coolant real)
+#   Haldex_01 / AWD_01 — Haldex demand %
+#
+# Format below: (can_id, byte_offset, scale, offset, valid_range_min, valid_range_max)
+# Set CAN_ID to None to mark as TBD — decoder returns None until configured.
+
+MAP_PCM_DECODER = {
+    "can_id": None,        # TBD — pending capture
+    "byte": 0,
+    "scale": 1.0,
+    "offset": 0.0,
+    "valid_min": 0,
+    "valid_max": 4000,
+    "unit": "mbar",
+}
+
+REAL_COOLANT_PCM_DECODER = {
+    "can_id": None,        # TBD — pending capture (likely Motor_07 or Motor_xx byte for true coolant)
+    "byte": 0,
+    "scale": 0.75,
+    "offset": -48.0,
+    "valid_min": -40,
+    "valid_max": 150,
+    "unit": "°C",
+}
+
+HALDEX_DEMAND_PCM_DECODER = {
+    "can_id": None,        # TBD — pending capture (likely Haldex_01 or AWD_xx)
+    "byte": 0,
+    "scale": 0.4,          # typical: byte 0..255 → 0..100%
+    "offset": 0.0,
+    "valid_min": 0,
+    "valid_max": 100,
+    "unit": "%",
+}
+
+
+def decode_pcm_broadcast(can_id: int, data: bytes, decoder: dict) -> Optional[float]:
+    """Generic decoder for a PCM broadcast signal using a decoder dict."""
+    target_id = decoder.get("can_id")
+    if target_id is None or can_id != target_id:
+        return None
+    byte = decoder.get("byte", 0)
+    if byte >= len(data):
+        return None
+    raw = data[byte]
+    val = raw * decoder.get("scale", 1.0) + decoder.get("offset", 0.0)
+    if val < decoder.get("valid_min", -1e9) or val > decoder.get("valid_max", 1e9):
+        return None
+    return val
+
+
+# ---------------------------------------------------------------------------
+# Mapping function (CAN0 cluster Motor_09)
+# ---------------------------------------------------------------------------
+
 def map_mbar_to_motor09_byte(
     map_mbar: float,
     map_min_mbar: float,
@@ -88,21 +158,31 @@ def map_mbar_to_motor09_byte(
     temp_max_c: float,
     scale: float = 1.0,
     offset_c: float = 0.0,
+    formula: str = "linear",
 ) -> int:
     """
     Map a MAP pressure (mbar) into a Motor_09 byte 0 value via configurable bounds.
 
-    Linear interpolation between (map_min → temp_min) and (map_max → temp_max),
+    Interpolation between (map_min → temp_min) and (map_max → temp_max),
     then apply scale & offset, then convert °C to byte.
+
+    Formula choices:
+      'linear'      : straight line interpolation (default)
+      'exp'         : exponential — gauge ramps faster as MAP goes up (drama)
+      'sqrt'        : square-root — gauge moves more at low MAP (sensitivity)
 
     Clamped to byte range 0..255.
     """
     if map_max_mbar == map_min_mbar:
-        # Avoid div/0 — just return mid
         temp_c = (temp_min_c + temp_max_c) / 2
     else:
         ratio = (map_mbar - map_min_mbar) / (map_max_mbar - map_min_mbar)
         ratio = max(0.0, min(1.0, ratio))
+        if formula == "exp":
+            ratio = ratio * ratio          # 0..1 → curved more at top
+        elif formula == "sqrt":
+            ratio = ratio ** 0.5           # 0..1 → curved more at bottom
+        # else "linear" (and unknown values fall back to linear)
         temp_c = temp_min_c + ratio * (temp_max_c - temp_min_c)
 
     temp_c = temp_c * scale + offset_c

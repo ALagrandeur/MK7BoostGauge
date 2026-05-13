@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=1">
+<link rel="stylesheet" href="/style.css?v=2">
 </head>
 <body>
 
@@ -15,71 +15,15 @@
 
 <main>
 
-  <section class="card">
-    <h2>État live</h2>
-    <div class="grid-live">
-      <div><span class="lbl">Levier</span><span id="live-lever">—</span></div>
-      <div><span class="lbl">MAP</span><span id="live-map">— mbar</span></div>
-      <div><span class="lbl">MAP source</span><span id="live-mapsrc">—</span></div>
-      <div><span class="lbl">Coolant aff.</span><span id="live-temp">— °C</span></div>
-      <div><span class="lbl">Motor_09 byte</span><span id="live-byte">0x—</span></div>
-      <div><span class="lbl">TX cluster</span><span id="live-tx">0</span></div>
-      <div><span class="lbl">RX cluster</span><span id="live-rxc">0</span></div>
-      <div><span class="lbl">RX can1</span><span id="live-rxp">0</span></div>
-      <div><span class="lbl">MAP age</span><span id="live-mapage">— s</span></div>
-    </div>
-  </section>
+  <!-- ===================================================================
+       CARD: CAN0 = Cluster boost gauge control
+       =================================================================== -->
+  <section class="card card-can0">
+    <h2>🎯 CAN0 — Aiguille température (Cluster)</h2>
+    <p class="muted small">Une seule fonction : contrôler l'aiguille de température du cluster
+       via Motor_09 (0x647). Tous les paramètres ci-dessous configurent le mapping
+       <code>MAP (mbar) → byte coolant cluster</code>.</p>
 
-  <section class="card">
-    <h2>CAN — branchement</h2>
-    <p class="muted small">CAN0 = toujours câblé au <b>Cluster</b> (lecture + écriture Motor_09). CAN1 = bascule entre <b>PCM</b> (tap Powertrain direct) ou <b>Diagnostic</b> (port OBD-II).</p>
-    <div class="toggle-group">
-      <label class="toggle-opt">
-        <input type="radio" name="can1_mode" value="pcm">
-        <span class="toggle-label"><b>CAN1 → PCM</b><br><span class="small muted">Tap Powertrain. Sniff broadcasts + UDS.</span></span>
-      </label>
-      <label class="toggle-opt">
-        <input type="radio" name="can1_mode" value="diagnostic">
-        <span class="toggle-label"><b>CAN1 → Diagnostic</b><br><span class="small muted">Port OBD-II. UDS query forcée.</span></span>
-      </label>
-    </div>
-    <div id="can1-status" class="muted small"></div>
-  </section>
-
-  <section class="card card-safety">
-    <h2>🛡️ Sécurité</h2>
-
-    <label class="switch-row">
-      <input type="checkbox" id="cfg-can1_listen_only">
-      <span class="switch-text">
-        <b>CAN1 LISTEN-ONLY</b> — bloquer toute écriture sur CAN1
-        <br><span class="small muted">Quand activé : aucune frame n'est envoyée sur le bus PCM/Diagnostic. Aucune UDS query, rien. Mode 100 % passif côté CAN1. Le bus Cluster (CAN0) reste actif pour Motor_09.</span>
-      </span>
-    </label>
-
-    <div class="safety-info">
-      <div class="safety-row">
-        <span class="lbl">Airbag IDs hard-blocked</span>
-        <span id="safety-airbag-list" class="mono">—</span>
-      </div>
-      <div class="safety-row">
-        <span class="lbl">TX bloqués (airbag)</span>
-        <span id="safety-blocked-airbag" class="mono">0</span>
-      </div>
-      <div class="safety-row">
-        <span class="lbl">TX bloqués (listen-only)</span>
-        <span id="safety-blocked-listen" class="mono">0</span>
-      </div>
-      <p class="muted small safety-note">
-        ✓ La blocklist airbag est <b>hardcodée</b> dans le firmware ; elle ne peut PAS être réduite via cette interface.<br>
-        ✓ Tout TX d'un ID listé en blocklist est rejeté au plus bas niveau (CanManager.send) avant d'atteindre le bus.<br>
-        ✓ Aucun message Airbag_01 (0x040), Airbag_02 (0x572), Airbag_03 (0x585) ne peut sortir du Pi.
-      </p>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Configuration mapping</h2>
     <div class="row">
       <label>MAP min (mbar) <input type="number" id="cfg-map_min_mbar" min="0" max="4000" step="10"></label>
       <label>MAP max (mbar) <input type="number" id="cfg-map_max_mbar" min="0" max="4000" step="10"></label>
@@ -93,34 +37,160 @@
       <label>Offset (°C) <input type="number" id="cfg-offset_c" min="-50" max="50" step="1"></label>
     </div>
     <div class="row">
-      <label>TX rate (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1"></label>
+      <label>Formule
+        <select id="cfg-formula">
+          <option value="linear">Linéaire (par défaut)</option>
+          <option value="exp">Exponentielle (drame)</option>
+          <option value="sqrt">Racine carrée (sensibilité basse)</option>
+        </select>
+      </label>
+      <label>Fréquence TX (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1"></label>
     </div>
     <div class="actions">
       <button id="btn-save">💾 Sauvegarder</button>
       <button id="btn-reset" class="secondary">↺ Reset défauts</button>
     </div>
     <div id="save-status" class="muted"></div>
+
+    <div class="live-mini">
+      <span>Levier: <b id="live-lever">—</b></span>
+      <span>Temp envoyée: <b id="live-temp">— °C</b></span>
+      <span>Byte: <b id="live-byte">0x—</b></span>
+      <span>TX: <b id="live-tx">0</b></span>
+    </div>
   </section>
 
+  <!-- ===================================================================
+       CARD: CAN1 — mode toggle
+       =================================================================== -->
   <section class="card">
-    <h2>Modes</h2>
-    <table class="modes">
-      <thead><tr><th>Levier</th><th>Mode</th><th>Affichage</th></tr></thead>
-      <tbody>
-        <tr><td>S / M / N</td><td class="boost">BOOST</td><td>Pression turbo (mappée)</td></tr>
-        <tr><td>D / P / R</td><td class="temp">TEMP</td><td>Température réelle (gateway forward)</td></tr>
-      </tbody>
-    </table>
+    <h2>🔌 CAN1 — branchement</h2>
+    <p class="muted small">CAN0 = toujours Cluster. CAN1 = bascule entre PCM (tap Powertrain, écoute seulement) ou Diagnostic (port OBD-II, écoute + transmission).</p>
+    <div class="toggle-group">
+      <label class="toggle-opt">
+        <input type="radio" name="can1_mode" value="pcm">
+        <span class="toggle-label">
+          <b>CAN1 → PCM</b><br>
+          <span class="small muted">Tap Powertrain. <b>RX-only forcé</b>. Affiche MAP / coolant / Haldex %.</span>
+        </span>
+      </label>
+      <label class="toggle-opt">
+        <input type="radio" name="can1_mode" value="diagnostic">
+        <span class="toggle-label">
+          <b>CAN1 → Diagnostic (OBD-II)</b><br>
+          <span class="small muted">Port J1962. RX + TX. Outil OBD2 (lecture/effacement DTC, MAP, coolant).</span>
+        </span>
+      </label>
+    </div>
+    <div id="can1-status" class="muted small"></div>
+  </section>
+
+  <!-- ===================================================================
+       CARD: PCM Live Data — visible only when can1_mode=pcm
+       =================================================================== -->
+  <section class="card card-pcm" id="card-pcm" style="display:none">
+    <h2>📡 PCM — Lecture en direct</h2>
+    <p class="muted small">Décodage passif des broadcasts Powertrain CAN.
+       <b>Aucune frame n'est transmise sur CAN1</b> (mode RX-only verrouillé par design).</p>
+
+    <div class="grid-live">
+      <div>
+        <span class="lbl">MAP réelle</span>
+        <span id="pcm-map">— mbar</span>
+        <span class="age" id="pcm-map-age"></span>
+      </div>
+      <div>
+        <span class="lbl">Coolant réel</span>
+        <span id="pcm-coolant">— °C</span>
+        <span class="age" id="pcm-coolant-age"></span>
+      </div>
+      <div>
+        <span class="lbl">Haldex demande</span>
+        <span id="pcm-haldex">— %</span>
+        <span class="age" id="pcm-haldex-age"></span>
+      </div>
+      <div>
+        <span class="lbl">RX can1</span>
+        <span id="live-rxp">0</span>
+      </div>
+    </div>
+
+    <p id="pcm-tbd-warning" class="warning small">
+      ⚠️ Les IDs broadcast pour MAP / coolant / Haldex ne sont pas encore identifiés
+      pour ton véhicule. Capture Powertrain CAN 10 s moteur tournant → envoie au dev pour décoder.
+    </p>
+  </section>
+
+  <!-- ===================================================================
+       CARD: OBD2 Tool — visible only when can1_mode=diagnostic
+       =================================================================== -->
+  <section class="card card-obd2" id="card-obd2" style="display:none">
+    <h2>🛠️ OBD2 — Outil diagnostic</h2>
+    <p class="muted small">Requêtes UDS vers l'engine ECU via le port OBD-II.
+       Nécessite <b>LISTEN-ONLY désarmé</b>.</p>
+
+    <div class="row">
+      <button class="obd-btn" data-action="read_map">📊 Lire MAP</button>
+      <button class="obd-btn" data-action="read_coolant">🌡️ Lire coolant</button>
+    </div>
+    <div class="row">
+      <button class="obd-btn" data-action="read_dtcs">🔍 Lire DTC</button>
+      <button class="obd-btn secondary danger" data-action="clear_dtcs">🗑️ Effacer DTC</button>
+    </div>
+
+    <div id="obd2-result" class="obd2-result"></div>
+    <div id="obd2-dtc-list" class="dtc-list"></div>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Sécurité (always visible)
+       =================================================================== -->
+  <section class="card card-safety">
+    <h2>🛡️ Sécurité</h2>
+
+    <label class="switch-row" id="switch-listen-only-wrap">
+      <input type="checkbox" id="cfg-can1_listen_only">
+      <span class="switch-text">
+        <b>CAN1 LISTEN-ONLY</b> — bloquer toute écriture sur CAN1
+        <br><span class="small muted" id="listen-only-help">
+          En mode Diagnostic : armable manuellement pour sécurité supplémentaire.
+        </span>
+      </span>
+    </label>
+
+    <div class="safety-info">
+      <div class="safety-row">
+        <span class="lbl">Airbag IDs hard-blocked</span>
+        <span id="safety-airbag-list" class="mono">—</span>
+      </div>
+      <div class="safety-row">
+        <span class="lbl">TX bloqués (airbag)</span>
+        <span id="safety-blocked-airbag" class="mono">0</span>
+      </div>
+      <div class="safety-row">
+        <span class="lbl">TX bloqués (PCM mode)</span>
+        <span id="safety-blocked-pcm" class="mono">0</span>
+      </div>
+      <div class="safety-row">
+        <span class="lbl">TX bloqués (listen-only)</span>
+        <span id="safety-blocked-listen" class="mono">0</span>
+      </div>
+      <p class="muted small safety-note">
+        ✓ Blocklist airbag hardcodée — non réductible.<br>
+        ✓ PCM mode = RX-only verrouillé au niveau driver, indépendant du switch listen-only.<br>
+        ✓ Aucun message Airbag_01/02/03 ne peut sortir du Pi.
+      </p>
+    </div>
   </section>
 
 </main>
 
 <footer>
   <span id="conn-status" class="muted">Connexion…</span>
-  <span class="muted">v0.1 — MK7BoostGauge</span>
+  <span class="muted">v0.2 — MK7BoostGauge</span>
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/app.js?v=1"></script>
+<script src="/app.js?v=2"></script>
 </body>
 </html>

@@ -29,6 +29,7 @@ def main() -> int:
         bitrate=cfg["can"]["bitrate"],
         forbidden_ids=set(cfg["safety"]["forbidden_can_ids"]),
         can1_listen_only=cfg["can"].get("can1_listen_only", False),
+        can1_mode=cfg["can"].get("can1_mode", "pcm"),
     )
     can_mgr.open()
 
