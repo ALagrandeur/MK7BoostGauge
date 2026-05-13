@@ -204,7 +204,7 @@ Une fois que tout marche en mode WiFi maison, on bascule en AP autonome :
 
 Apres reboot, le Pi cree son propre WiFi :
      SSID     : MK7-BoostGauge
-     Password : boostgauge
+     Password : boost123
      IP Pi    : 192.168.4.1
 
 Connecte-toi a ce WiFi avec ton telephone, va sur :

@@ -17,7 +17,7 @@ if [[ "$(id -u)" -ne 0 ]]; then
 fi
 
 SSID="MK7-BoostGauge"
-PASS="boostgauge"
+PASS="boost123"
 CHANNEL=6
 
 # ---------------------------------------------------------------- detect network stack

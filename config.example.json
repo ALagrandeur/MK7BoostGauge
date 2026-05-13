@@ -39,7 +39,7 @@
     "mode":        "ap",
     "_mode_choices": ["ap", "sta"],
     "ap_ssid":     "MK7-BoostGauge",
-    "ap_password": "boostgauge",
+    "ap_password": "boost123",
     "ap_channel":  6
   },
 

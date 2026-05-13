@@ -95,7 +95,7 @@ If you see your test frame → HAT is working.
 After installation in vehicle, key on:
 
 1. Wait ~30 sec for Pi boot
-2. On phone, scan WiFi → connect to **`MK7-BoostGauge`** (password: `boostgauge`)
+2. On phone, scan WiFi → connect to **`MK7-BoostGauge`** (password: `boost123`)
 3. Open browser → http://192.168.4.1
 4. Adjust sliders, save, observe live cluster gauge response
 

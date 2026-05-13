@@ -40,7 +40,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "wifi": {
         "mode": "ap",
         "ap_ssid": "MK7-BoostGauge",
-        "ap_password": "boostgauge",
+        "ap_password": "boost123",
         "ap_channel": 6,
     },
     "safety": {
