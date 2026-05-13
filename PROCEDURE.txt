@@ -244,6 +244,36 @@ ATTENTION : NE JAMAIS brancher sur batterie permanente (le Pi va
 
 
 ----------------------------------------------------------------
+ETAPE 8.5 - SAFETY : MODE LISTEN-ONLY (RECOMMANDE 1ER ESSAI)
+----------------------------------------------------------------
+
+Avant de demarrer le moteur pour la 1ere fois avec le device branche,
+RECOMMANDATION FORTE :
+
+1. Dans l'UI web -> section "Securite"
+2. ACTIVER la case "CAN1 LISTEN-ONLY"
+3. Sauvegarder
+
+Ca garantit que :
+   - AUCUNE frame ne sera envoyee sur le bus CAN1 (PCM ou Diagnostic)
+   - Aucune UDS query ne partira
+   - Le mode est 100% passif sur CAN1
+   - Le bus Cluster (CAN0) reste actif (sinon pas de gauge boost)
+
+Ainsi tu peux :
+   - Verifier que le pinout du Y-cable est correct (rien envoye = rien casse)
+   - Voir les frames qui ARRIVENT sur CAN1 (compteur RX qui monte)
+   - Eliminer tout doute sur le branchement physique
+
+Quand tout est confirme bon, DESARMER LISTEN-ONLY pour activer la
+fonction MAP (UDS query ou sniff selon mode CAN1).
+
+ATTENTION : la blocklist AIRBAG (0x040, 0x572, 0x585) est TOUJOURS active,
+            independemment de listen-only. C'est hardcode dans le firmware,
+            impossible a desactiver via l'UI ou la config.
+
+
+----------------------------------------------------------------
 ETAPE 9 - PREMIER ESSAI VOITURE
 ----------------------------------------------------------------
 

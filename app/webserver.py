@@ -39,13 +39,31 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         patch = request.get_json(force=True)
         if not isinstance(patch, dict):
             return jsonify({"ok": False, "error": "expect JSON object"}), 400
+
+        # SAFETY: forbidden_can_ids is hardcoded — refuse any client attempt to shrink it
+        try:
+            forbidden_patch = patch.get("safety", {}).get("forbidden_can_ids")
+            if forbidden_patch is not None:
+                current = set(config["safety"]["forbidden_can_ids"])
+                proposed = set(int(x, 16) if isinstance(x, str) else int(x) for x in forbidden_patch)
+                if not current.issubset(proposed):
+                    log.error("REFUSED config patch trying to remove forbidden_can_ids: %s", forbidden_patch)
+                    return jsonify({"ok": False, "error": "cannot remove forbidden_can_ids (airbag protection)"}), 403
+        except Exception:
+            return jsonify({"ok": False, "error": "invalid safety.forbidden_can_ids format"}), 400
+
         config.update(patch)
         log.info("Config updated via API: %s", list(patch.keys()))
+
+        # Hot-apply CAN1 listen-only flag to the live CanManager
+        if "can" in patch and "can1_listen_only" in patch["can"]:
+            controller.can.set_can1_listen_only(bool(patch["can"]["can1_listen_only"]))
+
         return jsonify({"ok": True, "config": config.data})
 
     @app.route("/api/state", methods=["GET"])
     def api_state():
-        return jsonify(controller.state.snapshot())
+        return jsonify(_full_state())
 
     @app.route("/api/reboot", methods=["POST"])
     def api_reboot():
@@ -54,17 +72,24 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         os.system("sudo /sbin/reboot")
         return jsonify({"ok": True})
 
+    # Helper that merges per-iteration BoostState snapshot with CanManager safety counters
+    def _full_state() -> dict:
+        s = controller.state.snapshot()
+        s["blocked_airbag"] = controller.can.blocked_forbidden_count
+        s["blocked_listen_only"] = controller.can.blocked_listen_only_count
+        return s
+
     # ---------------- WebSocket ----------------
 
     @socketio.on("connect")
     def on_connect():
         socketio.emit("config", config.data)
-        socketio.emit("state", controller.state.snapshot())
+        socketio.emit("state", _full_state())
 
     # Background thread: push state every 200 ms
     def state_pusher():
         while True:
-            socketio.emit("state", controller.state.snapshot())
+            socketio.emit("state", _full_state())
             time.sleep(0.2)
 
     threading.Thread(target=state_pusher, daemon=True).start()

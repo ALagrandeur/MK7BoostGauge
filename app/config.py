@@ -28,6 +28,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "cluster_iface": "can0",
         "can1_iface": "can1",
         "can1_mode": "pcm",            # "pcm" or "diagnostic"
+        "can1_listen_only": False,     # SAFETY: when True, CAN1 is RX-only (no UDS query, no anything)
         "bitrate": 500000,
         "map_source": "auto",          # "auto" / "broadcast" / "uds"
         "uds_did_map": 0x39C0,
@@ -62,6 +63,8 @@ def _migrate_v1_to_v2(data: dict) -> dict:
         log.info("Migrated v1->v2: added can1_mode='pcm'")
     if "map_source" not in can:
         can["map_source"] = "auto"
+    if "can1_listen_only" not in can:
+        can["can1_listen_only"] = False
     data["_version"] = 2
     return data
 

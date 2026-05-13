@@ -42,6 +42,7 @@ class BoostState:
     map_last_seen_ts: float = 0.0
     lever_last_seen_ts: float = 0.0
     can1_mode: str = "pcm"
+    can1_listen_only: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def snapshot(self) -> dict:
@@ -59,6 +60,7 @@ class BoostState:
                 "map_age_s": round(time.time() - self.map_last_seen_ts, 1) if self.map_last_seen_ts else None,
                 "lever_age_s": round(time.time() - self.lever_last_seen_ts, 1) if self.lever_last_seen_ts else None,
                 "can1_mode": self.can1_mode,
+                "can1_listen_only": self.can1_listen_only,
             }
 
 
@@ -96,23 +98,28 @@ class BoostController:
     # --------------------------------------------------------- helpers
 
     def _effective_map_source(self) -> str:
-        """Decide actual MAP source given config + can1 mode.
+        """Decide actual MAP source given config + can1 mode + listen-only safety.
 
+        - listen_only=True → 'broadcast' (no TX possible, so UDS impossible — only sniff)
         - source=broadcast → broadcast (only meaningful in PCM mode)
         - source=uds       → uds
         - source=auto      → broadcast in PCM mode, uds in Diagnostic mode
         """
         cfg_src = self.config["can"].get("map_source", "auto")
         mode = self.config["can"].get("can1_mode", "pcm")
+        listen_only = bool(self.config["can"].get("can1_listen_only", False))
         # Hot-update state mirror
         with self.state.lock:
             self.state.can1_mode = mode
+            self.state.can1_listen_only = listen_only
 
+        if listen_only:
+            # Can't query UDS → force broadcast attempt (will be no-op until ID identified)
+            return "broadcast"
         if cfg_src == "broadcast":
             return "broadcast"
         if cfg_src == "uds":
             return "uds"
-        # auto:
         return "broadcast" if mode == "pcm" else "uds"
 
     # ------------------------------------------------------------ RX cluster

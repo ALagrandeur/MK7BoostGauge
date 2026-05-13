@@ -37,15 +37,33 @@ class CanManager:
         can1_iface: str,
         bitrate: int = 500_000,
         forbidden_ids: Optional[set[int]] = None,
+        can1_listen_only: bool = False,
     ) -> None:
         self.iface = {"cluster": cluster_iface, "can1": can1_iface}
         self.bitrate = bitrate
         self.forbidden_ids = forbidden_ids or set()
+        # SAFETY: when True, every TX on can1 is hard-blocked at this layer
+        # (independent of any logic in boost_logic / webserver above).
+        self._can1_listen_only = bool(can1_listen_only)
 
         self.bus: dict[str, Optional["can.BusABC"]] = {"cluster": None, "can1": None}
         self._listeners: dict[str, list[Callable]] = {ch: [] for ch in CHANNELS}
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
+        # Counter for blocked TX events (visible in UI for trust/debug)
+        self.blocked_tx_count = 0
+        self.blocked_listen_only_count = 0
+        self.blocked_forbidden_count = 0
+
+    def set_can1_listen_only(self, on: bool) -> None:
+        """Hot-update the listen-only flag (called by webserver on toggle change)."""
+        if on != self._can1_listen_only:
+            log.warning("CAN1 listen-only changed: %s -> %s", self._can1_listen_only, on)
+        self._can1_listen_only = bool(on)
+
+    @property
+    def can1_listen_only(self) -> bool:
+        return self._can1_listen_only
 
     # ------------------------------------------------------------------ open
 
@@ -93,8 +111,19 @@ class CanManager:
         if channel not in CHANNELS:
             log.error("Unknown channel '%s'", channel)
             return False
+
+        # SAFETY GATE 1: airbag / forbidden IDs — hard-block on ANY channel
         if can_id in self.forbidden_ids:
-            log.warning("BLOCKED forbidden TX id 0x%X on %s", can_id, channel)
+            self.blocked_tx_count += 1
+            self.blocked_forbidden_count += 1
+            log.warning("BLOCKED forbidden TX id 0x%X on %s (FORBIDDEN_IDS)", can_id, channel)
+            return False
+
+        # SAFETY GATE 2: CAN1 listen-only — hard-block ALL TX on can1 when armed
+        if channel == "can1" and self._can1_listen_only:
+            self.blocked_tx_count += 1
+            self.blocked_listen_only_count += 1
+            log.info("BLOCKED TX id 0x%X on can1 (listen-only mode armed)", can_id)
             return False
 
         bus = self.bus[channel]

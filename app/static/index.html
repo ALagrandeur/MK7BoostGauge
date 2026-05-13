@@ -32,7 +32,7 @@
 
   <section class="card">
     <h2>CAN — branchement</h2>
-    <p class="muted small">CAN0 = toujours câblé au <b>Cluster</b>. CAN1 = bascule entre <b>PCM</b> (tap Powertrain direct) ou <b>Diagnostic</b> (port OBD-II).</p>
+    <p class="muted small">CAN0 = toujours câblé au <b>Cluster</b> (lecture + écriture Motor_09). CAN1 = bascule entre <b>PCM</b> (tap Powertrain direct) ou <b>Diagnostic</b> (port OBD-II).</p>
     <div class="toggle-group">
       <label class="toggle-opt">
         <input type="radio" name="can1_mode" value="pcm">
@@ -44,6 +44,38 @@
       </label>
     </div>
     <div id="can1-status" class="muted small"></div>
+  </section>
+
+  <section class="card card-safety">
+    <h2>🛡️ Sécurité</h2>
+
+    <label class="switch-row">
+      <input type="checkbox" id="cfg-can1_listen_only">
+      <span class="switch-text">
+        <b>CAN1 LISTEN-ONLY</b> — bloquer toute écriture sur CAN1
+        <br><span class="small muted">Quand activé : aucune frame n'est envoyée sur le bus PCM/Diagnostic. Aucune UDS query, rien. Mode 100 % passif côté CAN1. Le bus Cluster (CAN0) reste actif pour Motor_09.</span>
+      </span>
+    </label>
+
+    <div class="safety-info">
+      <div class="safety-row">
+        <span class="lbl">Airbag IDs hard-blocked</span>
+        <span id="safety-airbag-list" class="mono">—</span>
+      </div>
+      <div class="safety-row">
+        <span class="lbl">TX bloqués (airbag)</span>
+        <span id="safety-blocked-airbag" class="mono">0</span>
+      </div>
+      <div class="safety-row">
+        <span class="lbl">TX bloqués (listen-only)</span>
+        <span id="safety-blocked-listen" class="mono">0</span>
+      </div>
+      <p class="muted small safety-note">
+        ✓ La blocklist airbag est <b>hardcodée</b> dans le firmware ; elle ne peut PAS être réduite via cette interface.<br>
+        ✓ Tout TX d'un ID listé en blocklist est rejeté au plus bas niveau (CanManager.send) avant d'atteindre le bus.<br>
+        ✓ Aucun message Airbag_01 (0x040), Airbag_02 (0x572), Airbag_03 (0x585) ne peut sortir du Pi.
+      </p>
+    </div>
   </section>
 
   <section class="card">

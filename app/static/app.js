@@ -24,6 +24,18 @@ function fillConfig(cfg) {
   document.querySelectorAll('input[name="can1_mode"]').forEach(r => {
     r.checked = (r.value === mode);
   });
+  // CAN1 listen-only switch
+  const listenOnly = !!cfg?.can?.can1_listen_only;
+  const lo = $("cfg-can1_listen_only");
+  if (lo) lo.checked = listenOnly;
+  // Airbag blocklist (read-only display)
+  const airbag = cfg?.safety?.forbidden_can_ids || [];
+  const airbagEl = $("safety-airbag-list");
+  if (airbagEl) {
+    airbagEl.textContent = airbag.length
+      ? airbag.map(id => "0x" + id.toString(16).toUpperCase().padStart(3, "0")).join(", ")
+      : "(none — DANGER)";
+  }
 }
 
 function updateLive(s) {
@@ -46,8 +58,14 @@ function updateLive(s) {
   // Reflect actual can1_mode into status text
   const statusEl = $("can1-status");
   if (statusEl && s.can1_mode) {
-    statusEl.textContent = "Actif : CAN1 → " + (s.can1_mode === "pcm" ? "PCM" : "Diagnostic");
+    let txt = "Actif : CAN1 → " + (s.can1_mode === "pcm" ? "PCM" : "Diagnostic");
+    if (s.can1_listen_only) txt += " (LISTEN-ONLY armé)";
+    statusEl.textContent = txt;
   }
+
+  // Safety counters
+  if (s.blocked_airbag !== undefined) $("safety-blocked-airbag").textContent = s.blocked_airbag;
+  if (s.blocked_listen_only !== undefined) $("safety-blocked-listen").textContent = s.blocked_listen_only;
 }
 
 // ---------------- Save / Reset ----------------
@@ -105,6 +123,24 @@ document.querySelectorAll('input[name="can1_mode"]').forEach(radio => {
       status.textContent = "Erreur: " + (data.error || "?");
     }
   });
+});
+
+// ---------------- CAN1 listen-only safety switch (hot-applied) ----------------
+
+$("cfg-can1_listen_only")?.addEventListener("change", async (e) => {
+  const on = e.target.checked;
+  const r = await fetch("/api/config", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ can: { can1_listen_only: on } })
+  });
+  const data = await r.json();
+  const status = $("can1-status");
+  if (data.ok) {
+    status.textContent = on
+      ? "🛡️ LISTEN-ONLY ARMÉ — toute écriture sur CAN1 est bloquée."
+      : "⚠️ LISTEN-ONLY DÉSARMÉ — UDS query CAN1 réactivée.";
+  }
 });
 
 // ---------------- Initial fetch ----------------

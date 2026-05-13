@@ -61,6 +61,38 @@ Vehicle Cluster CAN     ◄─────  Pi writes Motor_09 (0x647)
 
 The toggle is hot-applied — change it from the web UI and replug the cable, no reboot.
 
+## 🛡️ Safety guarantees
+
+The "🛡️ Sécurité" card in the web UI exposes two hard guarantees, both enforced
+at the **lowest possible layer** (`CanManager.send`) — they cannot be bypassed
+by any higher-level logic, config edit, or REST call:
+
+### 1. Airbag blocklist (hardcoded)
+
+```python
+forbidden_ids = {0x040, 0x572, 0x585}  # Airbag_01, Airbag_02, Airbag_03
+```
+
+- Any TX attempt with an ID in this set is **rejected before reaching the bus**.
+- Counter visible in UI : "TX bloqués (airbag)".
+- The `/api/config` endpoint **refuses** any patch that tries to remove or shrink
+  this set (HTTP 403). Tested in `tests/test_safety.py`.
+
+### 2. CAN1 LISTEN-ONLY switch
+
+A user-controllable safety arming switch :
+
+- When **armed** (checkbox checked): `CanManager.send("can1", ...)` returns False
+  for every call, regardless of ID. Includes the firmware's own UDS query.
+- When **disarmed**: normal operation (UDS query active in Diagnostic mode, etc.)
+- The CAN0 (cluster) bus is unaffected — Motor_09 keeps broadcasting.
+- Hot-applied via REST `/api/config` with body `{"can": {"can1_listen_only": true}}`.
+- Counter visible in UI : "TX bloqués (listen-only)".
+
+Use this switch any time you connect to a vehicle for **read-only sniffing**,
+or when you're unsure whether your CAN1 cable is plugged into the right bus
+and want zero risk of injecting traffic on the wrong network.
+
 ## Config (settable in web UI, persisted)
 
 | Param | Default | Range | Description |
