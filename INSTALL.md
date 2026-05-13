@@ -3,8 +3,7 @@
 > Step-by-step from bare SD card to operational boost gauge.
 > Time estimate: **30 min** flash + **10 min** wiring once HAT is in hand.
 >
-> **OS**: Raspberry Pi OS Lite 64-bit (headless). DietPi also supported by the
-> install script as an alternative — same setup.sh works on both.
+> **OS**: Raspberry Pi OS Lite 64-bit (headless).
 
 ---
 

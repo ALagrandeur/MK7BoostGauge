@@ -127,9 +127,6 @@ Coller ces commandes une par une sur le Pi (en SSH) :
 L'install va prendre 5 a 10 minutes (telecharge dependances Python,
 configure les overlays CAN, cree le service systemd).
 
-Le script auto-detecte DietPi vs Pi OS Lite et utilise le bon
-utilisateur (dietpi vs pi) automatiquement.
-
 Quand c'est fini, tu vas voir :
    "==> [8/8] Done!"
 

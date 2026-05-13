@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # MK7BoostGauge — one-shot install script.
-# Compatible: Raspberry Pi OS Lite 64-bit AND DietPi 64-bit.
-# Tested on Pi Zero 2W + WaveShare 2-CH CAN HAT (MCP2515 + MCP2562).
+# Target: Raspberry Pi OS Lite 64-bit on Pi Zero 2W.
+# Hardware: WaveShare 2-CH CAN HAT (MCP2515 + MCP2562).
 #
 # Idempotent: safe to re-run.
 #
@@ -18,22 +18,11 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
-# ---------------------------------------------------------------- detect OS
-DETECTED_OS="unknown"
-if [[ -f /boot/dietpi.txt ]] || [[ -d /boot/dietpi ]] || command -v dietpi-config &>/dev/null; then
-  DETECTED_OS="dietpi"
-elif grep -qi "raspbian\|raspberry pi os\|debian.*rpi" /etc/os-release 2>/dev/null; then
-  DETECTED_OS="raspios"
-fi
-echo "==> Detected OS: $DETECTED_OS"
-
 # ---------------------------------------------------------------- detect user
-# Prefer SUDO_USER. Fallback by OS default: dietpi for DietPi, pi for Pi OS.
+# Prefer SUDO_USER, fallback to 'pi' (Pi OS default).
 PI_USER="${SUDO_USER:-}"
 if [[ -z "$PI_USER" || "$PI_USER" == "root" ]]; then
-  if [[ "$DETECTED_OS" == "dietpi" ]] && id dietpi &>/dev/null; then
-    PI_USER="dietpi"
-  elif id pi &>/dev/null; then
+  if id pi &>/dev/null; then
     PI_USER="pi"
   else
     PI_USER="$(getent passwd 1000 | cut -d: -f1)"
@@ -48,10 +37,9 @@ apt -qq -y install python3-pip python3-venv python3-dev can-utils \
                    hostapd dnsmasq net-tools git
 
 echo "==> [2/8] Enable SPI + add MCP2515 device tree overlays in config.txt"
-# Config path differs by OS:
-#   - Pi OS Lite (bookworm+) → /boot/firmware/config.txt
-#   - Pi OS Lite (bullseye)  → /boot/config.txt
-#   - DietPi (any release)    → /boot/config.txt
+# Config path:
+#   - Pi OS Lite Bookworm (current default) → /boot/firmware/config.txt
+#   - Pi OS Lite Bullseye (older)           → /boot/config.txt
 CONFIG_TXT=""
 for candidate in /boot/firmware/config.txt /boot/config.txt; do
   if [[ -f "$candidate" ]]; then
@@ -84,9 +72,9 @@ else
 echo "    Overlays already present, skipping."
 fi
 
-echo "==> [3/8] Create CAN bring-up systemd service (portable across DietPi/Pi OS)"
-# We use a dedicated oneshot service rather than systemd-networkd, because:
-#   - DietPi defaults to ifupdown/dhcpcd for eth0/wlan0 — enabling
+echo "==> [3/8] Create CAN bring-up systemd service"
+# Dedicated oneshot service rather than systemd-networkd, because:
+#   - Pi OS Bookworm uses NetworkManager for eth0/wlan0 — enabling
 #     systemd-networkd here would HIJACK the WiFi (you'd lose AP/STA).
 #   - This service ONLY touches can0/can1, never WiFi/Ethernet.
 cat > /etc/systemd/system/can-up.service <<'EOF'

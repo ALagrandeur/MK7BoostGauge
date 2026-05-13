@@ -42,7 +42,7 @@ Vehicle Cluster CAN     ◄─────  Pi writes Motor_09 (0x647)
 
 ## Architecture
 
-- **OS**: **Raspberry Pi OS Lite 64-bit** (headless) — install script also supports DietPi as alternative (auto-detected)
+- **OS**: **Raspberry Pi OS Lite 64-bit** (headless)
 - **Boot mode**: Read-only root (overlayfs) → SD card survives abrupt power-cuts
 - **CAN stack**: SocketCAN kernel driver
   - `can0` = **Cluster CAN** (always)
