@@ -302,10 +302,14 @@ class BoostController:
                 dead_zone_high_c=float(cfg.get("dead_zone_high_c", 110)),
             )
             payload = build_motor_09(byte0)
+            # Update intended-byte state IMMEDIATELY (consistent with TEST mode):
+            # user sees what we WANT to send, even if bus is unhealthy.
+            # tx_count only increments on actual bus success.
+            with self.state.lock:
+                self.state.last_motor09_byte = byte0
             ok = self.can.send(CH_CLUSTER, MOTOR_09_ID, payload)
             if ok:
                 with self.state.lock:
-                    self.state.last_motor09_byte = byte0
                     self.state.tx_count += 1
 
             time.sleep(period)
