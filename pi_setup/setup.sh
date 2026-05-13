@@ -84,23 +84,34 @@ else
 echo "    Overlays already present, skipping."
 fi
 
-echo "==> [3/8] Create can0/can1 systemd-networkd configs (auto-up at 500 kbps)"
-mkdir -p /etc/systemd/network
-cat > /etc/systemd/network/80-can0.network <<EOF
-[Match]
-Name=can0
-[CAN]
-BitRate=500000
-RestartSec=100ms
+echo "==> [3/8] Create CAN bring-up systemd service (portable across DietPi/Pi OS)"
+# We use a dedicated oneshot service rather than systemd-networkd, because:
+#   - DietPi defaults to ifupdown/dhcpcd for eth0/wlan0 — enabling
+#     systemd-networkd here would HIJACK the WiFi (you'd lose AP/STA).
+#   - This service ONLY touches can0/can1, never WiFi/Ethernet.
+cat > /etc/systemd/system/can-up.service <<'EOF'
+[Unit]
+Description=Bring up MCP2515 CAN interfaces (can0, can1) at 500 kbps
+DefaultDependencies=no
+After=local-fs.target
+Before=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Wait briefly for kernel to enumerate the SPI MCP2515 controllers
+ExecStartPre=/bin/sleep 2
+# Bring up each interface; '|| true' so service stays "active" even if a
+# controller is missing (e.g. only one CAN HAT chip wired).
+ExecStart=/bin/sh -c 'ip link set can0 up type can bitrate 500000 2>/dev/null || true'
+ExecStart=/bin/sh -c 'ip link set can1 up type can bitrate 500000 2>/dev/null || true'
+ExecStop=/bin/sh -c 'ip link set can0 down 2>/dev/null || true; ip link set can1 down 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
 EOF
-cat > /etc/systemd/network/80-can1.network <<EOF
-[Match]
-Name=can1
-[CAN]
-BitRate=500000
-RestartSec=100ms
-EOF
-systemctl enable systemd-networkd
+systemctl daemon-reload
+systemctl enable can-up.service
 
 echo "==> [4/8] Create writable config dir at $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
@@ -121,8 +132,8 @@ echo "==> [6/8] Install systemd service"
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=MK7BoostGauge standalone in-car boost gauge
-After=network-online.target sys-subsystem-net-devices-can0.device sys-subsystem-net-devices-can1.device
-Wants=network-online.target
+After=network.target can-up.service
+Wants=can-up.service
 
 [Service]
 Type=simple
@@ -131,6 +142,15 @@ WorkingDirectory=$PROJECT_DIR
 ExecStart=$VENV_DIR/bin/python -m app.main
 Restart=on-failure
 RestartSec=2
+
+# Don't write .pyc cache files — venv lives under /home which is ProtectHome=read-only.
+Environment="PYTHONDONTWRITEBYTECODE=1"
+Environment="PYTHONUNBUFFERED=1"
+
+# Allow binding port 80 as non-root user (needed for our HTTP server).
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE CAP_NET_RAW
+
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict

@@ -71,7 +71,7 @@ OS choisi : DietPi 64-bit pour Raspberry Pi Zero 2W
        AUTO_SETUP_AUTOMATED=1
        AUTO_SETUP_GLOBAL_PASSWORD=BoostGauge2026   (pwd que tu choisis)
        SURVEY_OPTED_IN=0
-       AUTO_SETUP_SSH_SERVER_INDEX=-1          (=Dropbear, leger)
+       AUTO_SETUP_SSH_SERVER_INDEX=-2          (=OpenSSH complet, recommande)
 
    FICHIER 2 : "boot/dietpi-wifi.txt"
      Trouver et remplir (entre les guillemets) :
