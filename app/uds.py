@@ -106,9 +106,13 @@ class UdsClient:
         self.req_id = req_id
         self.resp_id = resp_id
 
+        # State machine for sync request/response
         self._pending: Optional[bytes] = None
+        self._expected_resp_sid: Optional[int] = None  # filter so periodic queries don't clobber
         self._pending_event = threading.Event()
         self._lock = threading.Lock()
+        # Serializes ALL requests so concurrent OBD2 buttons don't race
+        self._request_lock = threading.Lock()
 
         # Register listener
         self.can.add_listener(channel, self._on_frame)
@@ -116,38 +120,69 @@ class UdsClient:
     # ------------------------------------------------------------------ rx hook
 
     def _on_frame(self, can_id: int, data: bytes, ts: float) -> None:
+        """Receive any can1 frame. Filter to only the response for the in-flight request.
+
+        Critical: this prevents the periodic UDS MAP query (response SID 0x62) from
+        being received as the response to an OBD2 button click (e.g. ReadDTC SID 0x59).
+        """
         if can_id != self.resp_id:
             return
+        if len(data) < 2:
+            return
+        sid = data[1]
         with self._lock:
+            expected = self._expected_resp_sid
+            if expected is None:
+                return  # no request in flight — ignore
+            # Accept either: positive response SID match, OR negative response (0x7F)
+            # (negative responses include the original SID at byte[2], we'll filter below)
+            if sid != expected and sid != NEGATIVE_RESPONSE_SID:
+                return  # someone else's response — ignore
+            if sid == NEGATIVE_RESPONSE_SID:
+                # Verify the NRC is for OUR service (data[2] = original SID)
+                if len(data) < 3 or data[2] != (expected - POSITIVE_RESPONSE_OFFSET):
+                    return
             self._pending = bytes(data)
             self._pending_event.set()
 
     # ------------------------------------------------------------------ low-level send/wait
 
     def _send_and_wait(self, payload: bytes, timeout_s: float = 0.5) -> Optional[bytes]:
-        """Send a single-frame ISO-TP request and wait for next response on resp_id.
+        """Send a single-frame ISO-TP request and wait for the matching response.
 
-        ISO-TP single-frame format: [length_nibble | data... | padding to 8 bytes]
-        We rely on the CanManager.send to actually transmit. If channel is blocked
-        (PCM mode / listen-only), send returns False and we return None.
+        Serialized via _request_lock so concurrent UDS calls don't race.
+        Filters responses by SID via _expected_resp_sid.
         """
         if len(payload) > 7:
             raise ValueError("payload too long for single-frame ISO-TP (max 7 bytes)")
-        # Build ISO-TP single frame: high nibble=0, low nibble=len, then payload, pad with 0
+        if len(payload) < 1:
+            raise ValueError("empty payload")
+        # ISO-TP single frame: byte[0] = length nibble, then payload, padded to 8
         frame = bytes([len(payload)]) + payload + bytes(7 - len(payload))
-        with self._lock:
-            self._pending = None
-            self._pending_event.clear()
+        # Expected positive response SID = request SID + 0x40
+        expected_resp_sid = (payload[0] + POSITIVE_RESPONSE_OFFSET) & 0xFF
 
-        if not self.can.send(self.channel, self.req_id, frame):
-            log.warning("UDS send blocked (channel=%s, req_id=0x%X)", self.channel, self.req_id)
-            return None
+        # Serialize all UDS interactions on this client
+        with self._request_lock:
+            with self._lock:
+                self._pending = None
+                self._pending_event.clear()
+                self._expected_resp_sid = expected_resp_sid
 
-        if not self._pending_event.wait(timeout=timeout_s):
-            log.warning("UDS timeout (req_id=0x%X, payload=%s)", self.req_id, payload.hex())
-            return None
-        with self._lock:
-            return self._pending
+            if not self.can.send(self.channel, self.req_id, frame):
+                log.warning("UDS send blocked (channel=%s, req_id=0x%X)", self.channel, self.req_id)
+                with self._lock:
+                    self._expected_resp_sid = None
+                return None
+
+            ok = self._pending_event.wait(timeout=timeout_s)
+            with self._lock:
+                self._expected_resp_sid = None
+                if not ok:
+                    log.warning("UDS timeout (req_id=0x%X, payload=%s)",
+                                self.req_id, payload.hex())
+                    return None
+                return self._pending
 
     # ------------------------------------------------------------------ services
 

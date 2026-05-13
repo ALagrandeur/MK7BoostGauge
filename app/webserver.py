@@ -95,6 +95,8 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         if data is None:
             return jsonify({"ok": False, "error": "no response (timeout or NRC)"}), 504
         mbar = decode_did_map_mbar(data)
+        if mbar is None:
+            return jsonify({"ok": False, "error": f"could not decode response: {data.hex()}"}), 502
         return jsonify({"ok": True, "map_mbar": mbar, "raw_hex": data.hex()})
 
     @app.route("/api/obd2/read_coolant", methods=["POST"])
@@ -106,6 +108,8 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         if data is None:
             return jsonify({"ok": False, "error": "no response (timeout or NRC)"}), 504
         c = decode_did_coolant_real_c(data)
+        if c is None:
+            return jsonify({"ok": False, "error": f"could not decode response: {data.hex()}"}), 502
         return jsonify({"ok": True, "coolant_real_c": c, "raw_hex": data.hex()})
 
     @app.route("/api/obd2/read_dtcs", methods=["POST"])

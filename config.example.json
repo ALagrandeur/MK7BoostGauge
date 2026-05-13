@@ -9,6 +9,8 @@
   "scale": 1.0,
   "offset_c": 0,
   "tx_rate_hz": 25,
+  "formula": "linear",
+  "_formula_choices": ["linear", "exp", "sqrt"],
 
   "can": {
     "_comment": "CAN0 = always Cluster bus. CAN1 = either PCM (Powertrain) or Diagnostic (OBD-II) — togglable in UI without rebooting.",
@@ -17,6 +19,9 @@
     "can1_iface":    "can1",
     "can1_mode":     "pcm",
     "_can1_mode_choices": ["pcm", "diagnostic"],
+
+    "can1_listen_only": false,
+    "_can1_listen_only_help": "When true, blocks ALL TX on CAN1 even in Diagnostic mode (extra safety).",
 
     "bitrate":          500000,
     "map_source":       "auto",
@@ -30,6 +35,7 @@
   },
 
   "wifi": {
+    "_comment": "Read by ap_setup.sh, NOT by the Python app (Python doesn't manage WiFi).",
     "mode":        "ap",
     "_mode_choices": ["ap", "sta"],
     "ap_ssid":     "MK7-BoostGauge",

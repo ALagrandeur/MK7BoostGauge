@@ -178,10 +178,10 @@ class BoostController:
         with self.state.lock:
             self.state.rx_can1_count += 1
 
-        # UDS positive response handler — only relevant when in Diagnostic mode
+        # UDS responses are handled exclusively by UdsClient (lazy-created in
+        # get_uds_client). We DO NOT double-process them here to avoid races
+        # with the SID-filtered UdsClient listener.
         if can_id == self.config["can"]["uds_engine_resp"]:
-            self._handle_uds_response(data, ts)
-            # Also consumed by UdsClient via its own listener if present
             return
 
         # PCM mode broadcast decoders
@@ -207,37 +207,31 @@ class BoostController:
                     self.state.pcm_haldex_demand_pct = v
                     self.state.pcm_last_haldex_ts = ts
 
-    def _handle_uds_response(self, data: bytes, ts: float) -> None:
-        """Decode a UDS positive ReadDataByIdentifier response on 0x7E8.
-
-        Expected: [LEN] 0x62 0x39 0xC0 <hi> <lo> ...
-        Value = (hi*256 + lo) mbar absolute
-        """
-        if len(data) < 6:
-            return
-        if data[1] != 0x62:
-            return
-        if data[2] != 0x39 or data[3] != 0xC0:
-            return
-        map_raw = (data[4] << 8) | data[5]
-        with self.state.lock:
-            self.state.map_mbar = float(map_raw)
-            self.state.map_last_seen_ts = ts
-            self.state.map_source_active = "uds"
-
     # ------------------------------------------------------------ UDS query loop
 
     def _uds_query_loop(self) -> None:
-        """Periodically poll engine ECU for MAP via UDS 0x22 0x39C0 if effective source=uds."""
-        # ReadDataByIdentifier(0x39C0) single-frame: 03 22 39 C0 00 00 00 00
-        payload = bytes([0x03, 0x22, 0x39, 0xC0, 0x00, 0x00, 0x00, 0x00])
+        """Periodically poll engine ECU for MAP via UdsClient when effective source=uds.
+
+        Goes through UdsClient (NOT direct can.send) to share the SID-filtered
+        response machinery with OBD2 button endpoints — avoids races where
+        button responses get clobbered by the periodic query.
+        """
+        from .uds import decode_did_map_mbar
         log.info("UDS MAP query loop started")
         while not self._stop.is_set():
             cfg = self.config["can"]
             period = 1.0 / max(1, int(cfg.get("uds_query_rate_hz", 10)))
             if self._effective_map_source() == "uds":
-                req_id = cfg["uds_engine_req"]
-                self.can.send(CH_CAN1, req_id, payload)
+                client = self.get_uds_client()
+                # 0.3s timeout < 1s/10Hz period (worst case 1 missed query)
+                data = client.read_data_by_identifier(0x39C0, timeout_s=0.3)
+                if data is not None:
+                    map_mbar = decode_did_map_mbar(data)
+                    if map_mbar is not None:
+                        with self.state.lock:
+                            self.state.map_mbar = map_mbar
+                            self.state.map_last_seen_ts = time.time()
+                            self.state.map_source_active = "uds"
             time.sleep(period)
 
     # ------------------------------------------------------------ TX loop
