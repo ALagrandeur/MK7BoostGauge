@@ -3,68 +3,40 @@
 > Step-by-step from bare SD card to operational boost gauge.
 > Time estimate: **30 min** flash + **10 min** wiring once HAT is in hand.
 >
-> **OS supported**: DietPi 64-bit (recommended) **or** Raspberry Pi OS Lite 64-bit.
-> The install script auto-detects which one you're on.
+> **OS**: Raspberry Pi OS Lite 64-bit (headless). DietPi also supported by the
+> install script as an alternative — same setup.sh works on both.
 
 ---
 
-## 1. Flash the SD card — DietPi (recommended)
+## 1. Flash the SD card — Raspberry Pi OS Lite 64-bit
 
-DietPi advantages on Pi Zero 2W: 2× faster boot (~15 s), 5× smaller footprint
-(~400 MB), logs in RAM (less SD wear), optimized for SBC.
-
-1. Download DietPi image: https://dietpi.com/#download → Raspberry Pi → "ARMv8 64-bit"
-2. Extract the `.img` from the `.7z` (use [7-Zip](https://www.7-zip.org/) or similar).
-3. Flash with **Raspberry Pi Imager**: choose "Use custom" → select the `.img`,
-   pick your SD card, write. (When asked about OS settings, click **NO** — DietPi
-   has its own pre-config system.)
-4. **DO NOT eject yet**. In Windows Explorer, the SD card shows as `boot` partition.
-   Edit two files with Notepad:
-
-   `boot/dietpi.txt` — set these keys:
-   ```
-   AUTO_SETUP_NET_HOSTNAME=boostgauge
-   AUTO_SETUP_LOCALE=en_US.UTF-8
-   AUTO_SETUP_TIMEZONE=America/Toronto
-   AUTO_SETUP_NET_WIFI_ENABLED=1
-   AUTO_SETUP_NET_WIFI_COUNTRY_CODE=CA
-   AUTO_SETUP_AUTOMATED=1
-   AUTO_SETUP_GLOBAL_PASSWORD=BoostGauge2026
-   SURVEY_OPTED_IN=0
-   AUTO_SETUP_SSH_SERVER_INDEX=-1
-   ```
-
-   `boot/dietpi-wifi.txt` — fill credentials:
-   ```
-   aWIFI_SSID[0]='YourHomeWiFi'
-   aWIFI_KEY[0]='YourWiFiPassword'
-   aWIFI_KEYMGR[0]='WPA-PSK'
-   ```
-5. Save both, eject, insert in Pi Zero 2W.
-
-### 1-bis. Alternative — Raspberry Pi OS Lite 64-bit
-
-If you prefer Pi OS Lite:
-1. Use Raspberry Pi Imager → Pi Zero 2W → Pi OS Lite (64-bit).
-2. ⚙️ settings: hostname `boostgauge`, user `pi`, password, SSH enabled, WiFi configured.
-3. Write, eject, insert.
+1. Download **Raspberry Pi Imager**: https://www.raspberrypi.com/software/
+2. Insert MicroSD (16 GB+, Class 10).
+3. Choose:
+   - Device: **Raspberry Pi Zero 2 W**
+   - OS: **Raspberry Pi OS (other) → Raspberry Pi OS Lite (64-bit)**
+   - Storage: your SD card
+4. Click ⚙️ (settings gear), set:
+   - Hostname: `boostgauge`
+   - SSH: ✅ enabled, password auth
+   - Username: `pi`, password: choose something memorable
+   - Wireless LAN: SSID + password of your home WiFi
+   - Wireless LAN country: `CA` (or yours)
+   - Locale: your timezone
+5. Save, write, eject, insert in Pi Zero 2W.
 
 ## 2. First boot + SSH
 
-**DietPi**: first boot is **8–15 min** (runs dietpi-update + initial setup). Subsequent
-boots are ~15 sec. Be patient on the first one.
-
-**Pi OS Lite**: first boot ~60 sec.
+Pi OS Lite first boot: ~60–90 seconds (resizes partition, configures user,
+connects to WiFi). Subsequent boots: ~25 seconds.
 
 ```bash
-# DietPi
-ssh dietpi@boostgauge.local
-
-# Pi OS Lite
 ssh pi@boostgauge.local
 ```
 
-If `.local` doesn't resolve, find the IP via your router admin page and use it.
+If `.local` doesn't resolve (some Android Chrome / corporate networks block mDNS),
+find the IP in your router's admin page (look for hostname `boostgauge`) and use
+`ssh pi@192.168.X.X`.
 
 ## 3. Install MK7BoostGauge
 

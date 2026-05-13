@@ -24,62 +24,46 @@ Avant de commencer, verifier que tu as :
 
 
 ----------------------------------------------------------------
-ETAPE 1 - FLASHER LA CARTE MICROSD AVEC DIETPI (sur PC Windows)
+ETAPE 1 - FLASHER LA CARTE MICROSD AVEC PI OS LITE 64-bit
 ----------------------------------------------------------------
 
-OS choisi : DietPi 64-bit pour Raspberry Pi Zero 2W
-   Avantages : boot 2x plus rapide, footprint reduit (~400 Mo vs 2 Go),
-   logs en RAM = moins d'usure SD, optimise pour SBC.
+OS choisi : Raspberry Pi OS Lite 64-bit (sans bureau).
+   Plus leger que la version Desktop. ~80 Mo RAM utilisee.
+   Boot 20-30 sec. Pas d'interface graphique mais on n'en a pas
+   besoin : tout passe par le web et SSH.
 
-1. Telecharger l'image DietPi :
-   https://dietpi.com/#download
-   Choisir : Raspberry Pi -> "ARMv8 64-bit" -> bouton DOWNLOAD
-   (fichier 7z, ~150 Mo)
+1. Telecharger Raspberry Pi Imager :
+   https://www.raspberrypi.com/software/
 
-2. Extraire le .img du 7z (utiliser 7-Zip si besoin :
-   https://www.7-zip.org/)
+2. Inserer la MicroSD dans ton PC (via adaptateur USB).
 
-3. Telecharger un outil de flash :
-   - Raspberry Pi Imager : https://www.raspberrypi.com/software/
-     (le plus simple : "USE CUSTOM IMAGE" pour pointer le .img DietPi)
-   - OU Balena Etcher : https://etcher.balena.io/
+3. Lancer Raspberry Pi Imager :
+   - CHOOSE DEVICE  : Raspberry Pi Zero 2 W
+   - CHOOSE OS      : Raspberry Pi OS (other) -> "Raspberry Pi OS Lite (64-bit)"
+   - CHOOSE STORAGE : ta MicroSD
+   - Cliquer NEXT
 
-4. Inserer la MicroSD dans le PC (via adaptateur USB).
+4. Cliquer "EDIT SETTINGS" (icone roue dentee) - TRES IMPORTANT.
 
-5. Avec Raspberry Pi Imager :
-   - Choose Device       : Raspberry Pi Zero 2 W
-   - Choose OS           : "Use custom" -> selectionner le .img DietPi extrait
-   - Choose Storage      : ta MicroSD
-   - Cliquer NEXT puis "NO" pour ne PAS appliquer les settings OS
-     (DietPi a son propre systeme de pre-config)
-   - Cliquer YES pour ecrire
+   Onglet "GENERAL" :
+     [x] Set hostname              : boostgauge
+     [x] Set username and password : pi  /  (mot de passe que tu choisis - NOTE-LE !)
+     [x] Configure wireless LAN    : SSID + password de ton WiFi maison
+                                     Wireless LAN country : CA (ou ton pays)
+     [x] Set locale settings       : ton fuseau horaire (ex: America/Toronto)
+                                     Keyboard layout : us (ou ca, fr)
 
-6. Attendre la fin du flash (~5 min), MAIS NE PAS EJECTER ENCORE.
+   Onglet "SERVICES" :
+     [x] Enable SSH
+     [x] Use password authentication
 
-7. Pre-configurer DietPi avant le 1er boot :
-   Ouvrir l'Explorateur Windows. La carte SD apparait comme "boot".
-   Editer 2 fichiers a l'interieur (avec Notepad) :
+   Onglet "OPTIONS" :
+     [x] Eject media when finished (pratique)
+     [ ] Play sound when finished  (optionnel)
 
-   FICHIER 1 : "boot/dietpi.txt"
-     Trouver et modifier ces lignes :
-       AUTO_SETUP_NET_HOSTNAME=boostgauge
-       AUTO_SETUP_LOCALE=en_US.UTF-8
-       AUTO_SETUP_KEYBOARD_LAYOUT=ca           (ou us, fr, etc)
-       AUTO_SETUP_TIMEZONE=America/Toronto     (ton fuseau)
-       AUTO_SETUP_NET_WIFI_ENABLED=1
-       AUTO_SETUP_NET_WIFI_COUNTRY_CODE=CA
-       AUTO_SETUP_AUTOMATED=1
-       AUTO_SETUP_GLOBAL_PASSWORD=BoostGauge2026   (pwd que tu choisis)
-       SURVEY_OPTED_IN=0
-       AUTO_SETUP_SSH_SERVER_INDEX=-2          (=OpenSSH complet, recommande)
+5. Cliquer "SAVE", puis "YES" pour appliquer les settings, puis "YES" pour ecrire.
 
-   FICHIER 2 : "boot/dietpi-wifi.txt"
-     Trouver et remplir (entre les guillemets) :
-       aWIFI_SSID[0]='NomDeTonWiFiMaison'
-       aWIFI_KEY[0]='MotDePasseWiFiMaison'
-       aWIFI_KEYMGR[0]='WPA-PSK'
-
-8. SAUVEGARDER les 2 fichiers, puis ejecter proprement la MicroSD.
+6. Attendre la fin du flash (~5 minutes), Pi Imager va ejecter la SD automatiquement.
 
 
 ----------------------------------------------------------------
@@ -103,37 +87,28 @@ ETAPE 2 - ASSEMBLER LE PI + HAT
 
 
 ----------------------------------------------------------------
-ETAPE 3 - PREMIER BOOT DIETPI + CONNEXION SSH
+ETAPE 3 - PREMIER BOOT + CONNEXION SSH
 ----------------------------------------------------------------
 
-DietPi premier boot : ~5 a 15 min (telecharge updates, configure systeme,
-                       installe paquets de base). Plus long que Pi OS Lite,
-                       MAIS un seul boot, ensuite ~15 sec.
+Pi OS Lite premier boot : ~60-90 secondes
+   (etend partition, configure user, connecte au WiFi).
+   Les boots suivants : ~25-30 secondes.
 
-1. Attendre 8-10 minutes apres avoir branche l'alim.
-   Le Pi va :
-     - Boot initial (1 min)
-     - dietpi-update (telecharge derniers packages, 3-5 min)
-     - dietpi-software (config initiale, 2-3 min)
-     - Reboot automatique (1 min)
-     - Pret a SSH
+1. Attendre 90 secondes apres avoir branche l'alim.
+   La LED verte du Pi clignote pendant le boot puis se stabilise.
 
 2. Sur ton PC Windows, ouvrir PowerShell ou cmd, taper :
 
-   ssh dietpi@boostgauge.local
+   ssh pi@boostgauge.local
 
    (Si "boostgauge.local" ne marche pas, trouve l'IP du Pi sur la page
-    admin de ton routeur et utilise : ssh dietpi@192.168.X.X )
+    admin de ton routeur et utilise : ssh pi@192.168.X.X )
 
-3. Quand demande, taper "yes" pour accepter la cle, puis le mot de passe
-   que tu as defini dans dietpi.txt (ex: BoostGauge2026).
+3. Quand demande, taper "yes" pour accepter la cle (1ere fois seulement),
+   puis le mot de passe que tu as defini dans Pi Imager a l'etape 1.
 
 4. Tu es maintenant en SSH sur le Pi. Le prompt :
-   dietpi@boostgauge:~$
-
-5. NOTE : DietPi est minimaliste, certaines commandes manquent.
-   Si tu vois un menu "DietPi-Launcher" au login, presser Ctrl+C
-   pour passer en shell normal.
+   pi@boostgauge:~ $
 
 
 ----------------------------------------------------------------
@@ -164,7 +139,7 @@ Faire un reboot :
 
 Attendre 30 secondes, puis SSH a nouveau :
 
-   ssh dietpi@boostgauge.local
+   ssh pi@boostgauge.local
 
 
 ----------------------------------------------------------------
@@ -388,29 +363,24 @@ EN CAS DE PROBLEME
 ----------------------------------------------------------------
 
 Probleme : "ssh: Could not resolve hostname boostgauge.local"
-Solution : trouve l'IP du Pi via le routeur, utilise l'IP
-           Avec DietPi, utiliser : ssh dietpi@<IP>
-           Avec Pi OS,   utiliser : ssh pi@<IP>
+Solution : trouve l'IP du Pi via la page admin du routeur (cherche
+           le hostname "boostgauge" dans la liste DHCP).
+           Puis utilise : ssh pi@192.168.X.X
 
 Probleme : "ip link" ne montre pas can0/can1
-Solution : verifier le fichier config.txt contient bien les overlays
-              DietPi  -> /boot/config.txt
-              Pi OS   -> /boot/firmware/config.txt
-           Ces lignes doivent etre presentes :
+Solution : verifier le fichier /boot/firmware/config.txt contient
+           bien les overlays (Pi OS Bookworm utilise /boot/firmware/,
+           anciens Pi OS Bullseye utilisent /boot/config.txt).
+           Lignes attendues :
               dtparam=spi=on
               dtoverlay=mcp2515-can0,oscillator=12000000,interrupt=25
               dtoverlay=mcp2515-can1,oscillator=12000000,interrupt=24
            Si manquant, relancer : sudo bash pi_setup/setup.sh
            puis : sudo reboot
 
-Probleme : DietPi premier boot bloque ou n'avance pas
-Solution : patience, le 1er boot prend 8-15 min sur Pi Zero 2W.
-           Si vraiment bloque (>20 min), debrancher / rebrancher.
-           Re-verifier /boot/dietpi-wifi.txt (SSID + password corrects).
-
-Probleme : DietPi - "sudo apt update" ne marche pas
-Solution : sudo dietpi-update          (mettre a jour DietPi d'abord)
-           puis : sudo apt update
+Probleme : "Permission denied" sur l'utilisateur pi
+Solution : verifier que SSH password auth est active dans Pi Imager
+           settings. Sinon, regenerer la SD avec les settings corrects.
 
 Probleme : Service crash au boot (status "failed")
 Solution : voir les logs : journalctl -u boostgauge -n 100
