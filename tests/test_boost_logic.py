@@ -226,6 +226,18 @@ def test_formula_sqrt_higher_than_linear_at_midpoint():
     assert b_sqrt > b_lin
 
 
+def test_temp_byte_specific_values_match_test_mode_targets():
+    """Sanity-check the byte values for the UI preset buttons."""
+    # 50°C → 0x80 (≈128) — needle bottom
+    assert 126 <= temp_c_to_motor09_byte(50) <= 130
+    # 90°C → ~0xB6 (≈182) — center
+    assert 180 <= temp_c_to_motor09_byte(90) <= 184
+    # 110°C → ~0xD0 (~210)
+    assert 208 <= temp_c_to_motor09_byte(110) <= 212
+    # 130°C → 0xED (≈237) — red zone
+    assert 235 <= temp_c_to_motor09_byte(130) <= 239
+
+
 def test_unknown_formula_falls_back_to_linear():
     args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
                 temp_min_c=50, temp_max_c=130)

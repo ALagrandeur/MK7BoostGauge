@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=3">
+<link rel="stylesheet" href="/style.css?v=4">
 </head>
 <body>
 
@@ -99,6 +99,44 @@
     </div>
 
     <p class="muted small" id="trans-age">En attente d'une frame WBA_03…</p>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Test Mode — manual cluster needle test
+       =================================================================== -->
+  <section class="card card-testmode">
+    <h2>🧪 Mode Test Cluster</h2>
+    <p class="muted small">
+      Force l'envoi d'une température fixe au cluster, sans WBA_03 ni MAP réelle.
+      Idéal pour tester l'aiguille avec <b>SEULEMENT CAN0</b> branché sur la voiture
+      (ou sur le bench).
+    </p>
+
+    <div id="testmode-banner" class="testmode-banner" style="display:none">
+      ⚠️ MODE TEST ACTIF — TX Motor_09 force, ignore le levier
+    </div>
+
+    <div class="row">
+      <label>Température cible (°C)
+        <input type="number" id="testmode-temp" min="0" max="150" step="1" value="90">
+      </label>
+      <label>Byte cible (calcule auto)
+        <input type="text" id="testmode-byte-preview" disabled value="0xB6">
+      </label>
+    </div>
+
+    <div class="row testmode-presets">
+      <button type="button" class="secondary preset-btn" data-temp="50">50°C (min aiguille)</button>
+      <button type="button" class="secondary preset-btn" data-temp="90">90°C (centre)</button>
+      <button type="button" class="secondary preset-btn" data-temp="110">110°C (haut zone neutre)</button>
+      <button type="button" class="secondary preset-btn" data-temp="130">130°C (rouge)</button>
+    </div>
+
+    <div class="actions">
+      <button id="btn-testmode-toggle">▶ Activer mode test</button>
+      <button id="btn-testmode-stop" class="secondary danger" style="display:none">■ ARRÊTER</button>
+    </div>
+    <p class="muted small" id="testmode-status">Mode test inactif.</p>
   </section>
 
   <!-- ===================================================================
@@ -271,6 +309,6 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/app.js?v=3"></script>
+<script src="/app.js?v=4"></script>
 </body>
 </html>

@@ -101,6 +101,12 @@ function updateLive(s) {
 
   // Transmission Input card
   updateTransmissionDisplay(s);
+
+  // Sync test mode UI if state changed externally (multi-browser)
+  if (typeof s.test_mode_active === "boolean" && s.test_mode_active !== testmodeActive) {
+    testmodeActive = s.test_mode_active;
+    applyTestmodeUI();
+  }
 }
 
 // ---------------- Save / Reset ----------------
@@ -352,6 +358,76 @@ $("btn-framelog-clear")?.addEventListener("click", async () => {
   await fetch("/api/framelog/clear", { method: "POST" });
   refreshFramelog();
 });
+
+// ---------------- Test Mode ----------------
+
+// Same formula as backend: byte = (temp_c + 43.94) / 0.7339
+function tempCToByte(t) {
+  let raw = (parseFloat(t) + 43.94) / 0.7339;
+  raw = Math.round(raw);
+  return Math.max(0, Math.min(255, raw));
+}
+
+function refreshTestmodeBytePreview() {
+  const tInput = $("testmode-temp");
+  if (!tInput) return;
+  const b = tempCToByte(tInput.value);
+  $("testmode-byte-preview").value =
+    "0x" + b.toString(16).toUpperCase().padStart(2, "0") + " (" + b + ")";
+}
+
+$("testmode-temp")?.addEventListener("input", refreshTestmodeBytePreview);
+
+document.querySelectorAll(".preset-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    $("testmode-temp").value = btn.dataset.temp;
+    refreshTestmodeBytePreview();
+    // If test mode already active, push the new temp immediately
+    if (testmodeActive) sendTestMode(true);
+  });
+});
+
+let testmodeActive = false;
+
+async function sendTestMode(active) {
+  const temp = parseFloat($("testmode-temp").value) || 90;
+  const r = await fetch("/api/test_mode", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ active: active, temp_c: temp })
+  });
+  const data = await r.json();
+  if (data.ok) {
+    testmodeActive = data.test_mode_active;
+    applyTestmodeUI();
+  }
+}
+
+function applyTestmodeUI() {
+  const banner = $("testmode-banner");
+  const startBtn = $("btn-testmode-toggle");
+  const stopBtn = $("btn-testmode-stop");
+  const status = $("testmode-status");
+  if (testmodeActive) {
+    banner.style.display = "block";
+    startBtn.textContent = "🔄 Mettre à jour température";
+    stopBtn.style.display = "block";
+    status.textContent = "✅ TX en cours vers le cluster...";
+    status.style.color = "var(--boost)";
+  } else {
+    banner.style.display = "none";
+    startBtn.textContent = "▶ Activer mode test";
+    stopBtn.style.display = "none";
+    status.textContent = "Mode test inactif.";
+    status.style.color = "";
+  }
+}
+
+$("btn-testmode-toggle")?.addEventListener("click", () => sendTestMode(true));
+$("btn-testmode-stop")?.addEventListener("click", () => sendTestMode(false));
+
+// Initial preview render
+refreshTestmodeBytePreview();
 
 // ---------------- Initial fetch ----------------
 

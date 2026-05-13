@@ -33,9 +33,9 @@ CH_CAN1    = "can1"
 class BoostState:
     """Live state — read by web UI and broadcast over websocket."""
     lever: Optional[str] = None
-    mode: str = "WAITING"               # 'BOOST' / 'TEMP' / 'WAITING'
+    mode: str = "WAITING"               # 'BOOST' / 'TEMP' / 'WAITING' / 'TEST'
     map_mbar: float = 0.0
-    map_source_active: str = "none"     # 'broadcast' / 'uds' / 'none'
+    map_source_active: str = "none"     # 'broadcast' / 'uds' / 'none' / 'test'
     last_motor09_byte: int = 0x80
     tx_count: int = 0
     rx_cluster_count: int = 0
@@ -44,6 +44,9 @@ class BoostState:
     lever_last_seen_ts: float = 0.0
     can1_mode: str = "pcm"
     can1_listen_only: bool = False
+    # Test mode: when True, bypass BOOST gating and TX a fixed temperature
+    test_mode_active: bool = False
+    test_mode_temp_c: float = 90.0
     # PCM live data (decoded from broadcasts when can1_mode='pcm')
     pcm_map_mbar: Optional[float] = None
     pcm_coolant_real_c: Optional[float] = None
@@ -73,6 +76,8 @@ class BoostState:
                 "lever_age_s": round(now - self.lever_last_seen_ts, 1) if self.lever_last_seen_ts else None,
                 "can1_mode": self.can1_mode,
                 "can1_listen_only": self.can1_listen_only,
+                "test_mode_active": self.test_mode_active,
+                "test_mode_temp_c": self.test_mode_temp_c,
                 # PCM live data
                 "pcm_map_mbar": round(self.pcm_map_mbar, 1) if self.pcm_map_mbar is not None else None,
                 "pcm_coolant_real_c": round(self.pcm_coolant_real_c, 1) if self.pcm_coolant_real_c is not None else None,
@@ -237,17 +242,48 @@ class BoostController:
     # ------------------------------------------------------------ TX loop
 
     def _tx_loop(self) -> None:
-        """Broadcast Motor_09 (0x647) on cluster CAN at configured rate when in BOOST mode."""
+        """Broadcast Motor_09 (0x647) on cluster CAN at configured rate.
+
+        Three modes:
+          - TEST mode (highest priority): always TX, byte = mapped from test_mode_temp_c
+          - BOOST mode: TX, byte = mapped from current MAP via configured formula
+          - TEMP / WAITING: silent (gateway forwards real Motor_09)
+        """
+        from .vw_signals import temp_c_to_motor09_byte
         log.info("TX loop started")
         while not self._stop.is_set():
             cfg = self.config.data
             period = 1.0 / max(1, int(cfg.get("tx_rate_hz", 25)))
 
             with self.state.lock:
+                test_active = self.state.test_mode_active
+                test_temp = self.state.test_mode_temp_c
                 mode = self.state.mode
                 map_mbar = self.state.map_mbar
 
-            # Mode (a): in non-BOOST levers, stay silent — let gateway forward real Motor_09
+            # ---- TEST MODE: bypass BOOST gating ----
+            if test_active:
+                byte0 = temp_c_to_motor09_byte(test_temp)
+                payload = build_motor_09(byte0)
+                # Reflect test mode in state IMMEDIATELY (even if send fails — user
+                # needs visible confirmation the test is armed regardless of bus health)
+                with self.state.lock:
+                    self.state.mode = "TEST"
+                    self.state.map_source_active = "test"
+                    self.state.last_motor09_byte = byte0
+                ok = self.can.send(CH_CLUSTER, MOTOR_09_ID, payload)
+                if ok:
+                    with self.state.lock:
+                        self.state.tx_count += 1
+                time.sleep(period)
+                continue
+
+            # ---- NORMAL MODE: BOOST only ----
+            if mode == "TEST":
+                # We just left test mode — reset to WAITING until a fresh WBA_03 arrives
+                with self.state.lock:
+                    self.state.mode = "WAITING"
+
             if mode != "BOOST":
                 time.sleep(period)
                 continue

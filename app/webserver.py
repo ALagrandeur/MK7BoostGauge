@@ -67,6 +67,29 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
     def api_state():
         return jsonify(_full_state())
 
+    # ---------------- Test Mode endpoint ----------------
+    # Bypass BOOST gating to manually push a fixed temperature to the cluster.
+    # Useful when only CAN0 (cluster) is wired and you want to verify the
+    # needle moves without WBA_03 / engine running.
+
+    @app.route("/api/test_mode", methods=["POST"])
+    def api_test_mode():
+        body = request.get_json(force=True) or {}
+        active = bool(body.get("active", False))
+        temp_c = body.get("temp_c", None)
+        with controller.state.lock:
+            controller.state.test_mode_active = active
+            if temp_c is not None:
+                try:
+                    controller.state.test_mode_temp_c = max(0, min(150, float(temp_c)))
+                except (TypeError, ValueError):
+                    return jsonify({"ok": False, "error": "temp_c must be a number 0-150"}), 400
+        log.warning("TEST MODE %s (temp_c=%.1f)", "ACTIVATED" if active else "DEACTIVATED",
+                    controller.state.test_mode_temp_c)
+        return jsonify({"ok": True,
+                        "test_mode_active": controller.state.test_mode_active,
+                        "test_mode_temp_c": controller.state.test_mode_temp_c})
+
     @app.route("/api/reboot", methods=["POST"])
     def api_reboot():
         import os
