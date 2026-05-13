@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# MK7BoostGauge — one-shot install script for fresh Raspberry Pi OS Lite.
+# MK7BoostGauge — one-shot install script.
+# Compatible: Raspberry Pi OS Lite 64-bit AND DietPi 64-bit.
 # Tested on Pi Zero 2W + WaveShare 2-CH CAN HAT (MCP2515 + MCP2562).
 #
 # Idempotent: safe to re-run.
@@ -8,7 +9,6 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-PI_USER="${SUDO_USER:-pi}"
 VENV_DIR="${PROJECT_DIR}/.venv"
 CONFIG_DIR="/var/lib/boostgauge"
 SERVICE_FILE="/etc/systemd/system/boostgauge.service"
@@ -18,14 +18,52 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exit 1
 fi
 
+# ---------------------------------------------------------------- detect OS
+DETECTED_OS="unknown"
+if [[ -f /boot/dietpi.txt ]] || [[ -d /boot/dietpi ]] || command -v dietpi-config &>/dev/null; then
+  DETECTED_OS="dietpi"
+elif grep -qi "raspbian\|raspberry pi os\|debian.*rpi" /etc/os-release 2>/dev/null; then
+  DETECTED_OS="raspios"
+fi
+echo "==> Detected OS: $DETECTED_OS"
+
+# ---------------------------------------------------------------- detect user
+# Prefer SUDO_USER. Fallback by OS default: dietpi for DietPi, pi for Pi OS.
+PI_USER="${SUDO_USER:-}"
+if [[ -z "$PI_USER" || "$PI_USER" == "root" ]]; then
+  if [[ "$DETECTED_OS" == "dietpi" ]] && id dietpi &>/dev/null; then
+    PI_USER="dietpi"
+  elif id pi &>/dev/null; then
+    PI_USER="pi"
+  else
+    PI_USER="$(getent passwd 1000 | cut -d: -f1)"
+    [[ -z "$PI_USER" ]] && PI_USER="root"
+  fi
+fi
+echo "==> Installing for user: $PI_USER"
+
 echo "==> [1/8] APT install dependencies"
 apt -qq update
 apt -qq -y install python3-pip python3-venv python3-dev can-utils \
-                   hostapd dnsmasq net-tools
+                   hostapd dnsmasq net-tools git
 
-echo "==> [2/8] Enable SPI + add MCP2515 device tree overlays in /boot/config.txt"
-CONFIG_TXT="/boot/firmware/config.txt"
-[[ -f "$CONFIG_TXT" ]] || CONFIG_TXT="/boot/config.txt"
+echo "==> [2/8] Enable SPI + add MCP2515 device tree overlays in config.txt"
+# Config path differs by OS:
+#   - Pi OS Lite (bookworm+) → /boot/firmware/config.txt
+#   - Pi OS Lite (bullseye)  → /boot/config.txt
+#   - DietPi (any release)    → /boot/config.txt
+CONFIG_TXT=""
+for candidate in /boot/firmware/config.txt /boot/config.txt; do
+  if [[ -f "$candidate" ]]; then
+    CONFIG_TXT="$candidate"
+    break
+  fi
+done
+if [[ -z "$CONFIG_TXT" ]]; then
+  echo "ERROR: no config.txt found in /boot/firmware/ or /boot/"
+  exit 1
+fi
+echo "    Using $CONFIG_TXT"
 
 # Backup once
 [[ -f "${CONFIG_TXT}.boostgauge.bak" ]] || cp "$CONFIG_TXT" "${CONFIG_TXT}.boostgauge.bak"

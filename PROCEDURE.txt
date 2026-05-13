@@ -24,34 +24,62 @@ Avant de commencer, verifier que tu as :
 
 
 ----------------------------------------------------------------
-ETAPE 1 - FLASHER LA CARTE MICROSD (sur ton PC Windows)
+ETAPE 1 - FLASHER LA CARTE MICROSD AVEC DIETPI (sur PC Windows)
 ----------------------------------------------------------------
 
-1. Telecharger Raspberry Pi Imager :
-   https://www.raspberrypi.com/software/
+OS choisi : DietPi 64-bit pour Raspberry Pi Zero 2W
+   Avantages : boot 2x plus rapide, footprint reduit (~400 Mo vs 2 Go),
+   logs en RAM = moins d'usure SD, optimise pour SBC.
 
-2. Inserer la MicroSD dans ton PC (avec adaptateur USB)
+1. Telecharger l'image DietPi :
+   https://dietpi.com/#download
+   Choisir : Raspberry Pi -> "ARMv8 64-bit" -> bouton DOWNLOAD
+   (fichier 7z, ~150 Mo)
 
-3. Lancer Raspberry Pi Imager :
+2. Extraire le .img du 7z (utiliser 7-Zip si besoin :
+   https://www.7-zip.org/)
+
+3. Telecharger un outil de flash :
+   - Raspberry Pi Imager : https://www.raspberrypi.com/software/
+     (le plus simple : "USE CUSTOM IMAGE" pour pointer le .img DietPi)
+   - OU Balena Etcher : https://etcher.balena.io/
+
+4. Inserer la MicroSD dans le PC (via adaptateur USB).
+
+5. Avec Raspberry Pi Imager :
    - Choose Device       : Raspberry Pi Zero 2 W
-   - Choose OS           : Raspberry Pi OS (other) > Raspberry Pi OS Lite (64-bit)
+   - Choose OS           : "Use custom" -> selectionner le .img DietPi extrait
    - Choose Storage      : ta MicroSD
+   - Cliquer NEXT puis "NO" pour ne PAS appliquer les settings OS
+     (DietPi a son propre systeme de pre-config)
+   - Cliquer YES pour ecrire
 
-4. Cliquer "NEXT", puis "EDIT SETTINGS" (icone roue dentee).
-   Onglet "GENERAL" :
-     [x] Set hostname              : boostgauge
-     [x] Set username and password : pi / (mot de passe que tu choisis - NOTE-LE !)
-     [x] Configure wireless LAN    : SSID + password de ton WiFi maison
-                                     (sert UNIQUEMENT pour la 1ere install)
-     [x] Set locale settings       : ton fuseau horaire
+6. Attendre la fin du flash (~5 min), MAIS NE PAS EJECTER ENCORE.
 
-   Onglet "SERVICES" :
-     [x] Enable SSH
-     [x] Use password authentication
+7. Pre-configurer DietPi avant le 1er boot :
+   Ouvrir l'Explorateur Windows. La carte SD apparait comme "boot".
+   Editer 2 fichiers a l'interieur (avec Notepad) :
 
-5. Cliquer "SAVE", puis "YES" pour appliquer, puis "YES" pour ecrire.
+   FICHIER 1 : "boot/dietpi.txt"
+     Trouver et modifier ces lignes :
+       AUTO_SETUP_NET_HOSTNAME=boostgauge
+       AUTO_SETUP_LOCALE=en_US.UTF-8
+       AUTO_SETUP_KEYBOARD_LAYOUT=ca           (ou us, fr, etc)
+       AUTO_SETUP_TIMEZONE=America/Toronto     (ton fuseau)
+       AUTO_SETUP_NET_WIFI_ENABLED=1
+       AUTO_SETUP_NET_WIFI_COUNTRY_CODE=CA
+       AUTO_SETUP_AUTOMATED=1
+       AUTO_SETUP_GLOBAL_PASSWORD=BoostGauge2026   (pwd que tu choisis)
+       SURVEY_OPTED_IN=0
+       AUTO_SETUP_SSH_SERVER_INDEX=-1          (=Dropbear, leger)
 
-6. Attendre la fin (~5 minutes), puis ejecter proprement la MicroSD.
+   FICHIER 2 : "boot/dietpi-wifi.txt"
+     Trouver et remplir (entre les guillemets) :
+       aWIFI_SSID[0]='NomDeTonWiFiMaison'
+       aWIFI_KEY[0]='MotDePasseWiFiMaison'
+       aWIFI_KEYMGR[0]='WPA-PSK'
+
+8. SAUVEGARDER les 2 fichiers, puis ejecter proprement la MicroSD.
 
 
 ----------------------------------------------------------------
@@ -75,23 +103,37 @@ ETAPE 2 - ASSEMBLER LE PI + HAT
 
 
 ----------------------------------------------------------------
-ETAPE 3 - PREMIER BOOT + CONNEXION SSH
+ETAPE 3 - PREMIER BOOT DIETPI + CONNEXION SSH
 ----------------------------------------------------------------
 
-1. Attendre 60 secondes apres avoir branche l'alim.
+DietPi premier boot : ~5 a 15 min (telecharge updates, configure systeme,
+                       installe paquets de base). Plus long que Pi OS Lite,
+                       MAIS un seul boot, ensuite ~15 sec.
+
+1. Attendre 8-10 minutes apres avoir branche l'alim.
+   Le Pi va :
+     - Boot initial (1 min)
+     - dietpi-update (telecharge derniers packages, 3-5 min)
+     - dietpi-software (config initiale, 2-3 min)
+     - Reboot automatique (1 min)
+     - Pret a SSH
 
 2. Sur ton PC Windows, ouvrir PowerShell ou cmd, taper :
 
-   ssh pi@boostgauge.local
+   ssh dietpi@boostgauge.local
 
    (Si "boostgauge.local" ne marche pas, trouve l'IP du Pi sur la page
-    admin de ton routeur et utilise : ssh pi@192.168.X.X )
+    admin de ton routeur et utilise : ssh dietpi@192.168.X.X )
 
 3. Quand demande, taper "yes" pour accepter la cle, puis le mot de passe
-   que tu as defini a l'etape 1.
+   que tu as defini dans dietpi.txt (ex: BoostGauge2026).
 
-4. Tu es maintenant en SSH sur le Pi. Le prompt devrait ressembler a :
-   pi@boostgauge:~ $
+4. Tu es maintenant en SSH sur le Pi. Le prompt :
+   dietpi@boostgauge:~$
+
+5. NOTE : DietPi est minimaliste, certaines commandes manquent.
+   Si tu vois un menu "DietPi-Launcher" au login, presser Ctrl+C
+   pour passer en shell normal.
 
 
 ----------------------------------------------------------------
@@ -101,7 +143,6 @@ ETAPE 4 - INSTALLER MK7BoostGauge
 Coller ces commandes une par une sur le Pi (en SSH) :
 
    sudo apt update
-   sudo apt -y full-upgrade
    sudo apt -y install git
 
    git clone https://github.com/ALagrandeur/MK7BoostGauge.git
@@ -111,6 +152,9 @@ Coller ces commandes une par une sur le Pi (en SSH) :
 L'install va prendre 5 a 10 minutes (telecharge dependances Python,
 configure les overlays CAN, cree le service systemd).
 
+Le script auto-detecte DietPi vs Pi OS Lite et utilise le bon
+utilisateur (dietpi vs pi) automatiquement.
+
 Quand c'est fini, tu vas voir :
    "==> [8/8] Done!"
 
@@ -118,9 +162,9 @@ Faire un reboot :
 
    sudo reboot
 
-Attendre 60 secondes, puis SSH a nouveau :
+Attendre 30 secondes, puis SSH a nouveau :
 
-   ssh pi@boostgauge.local
+   ssh dietpi@boostgauge.local
 
 
 ----------------------------------------------------------------
@@ -325,14 +369,14 @@ Mettre a jour le code depuis GitHub :
    git pull
    sudo systemctl restart boostgauge
 
-Voir les frames CAN en direct sur le bus Powertrain :
+Voir les frames CAN en direct sur le bus Cluster (CAN0) :
    candump can0
 
-Voir les frames CAN en direct sur le bus Cluster :
+Voir les frames CAN en direct sur le bus PCM/Diagnostic (CAN1) :
    candump can1
 
 Envoyer une frame de test sur Cluster :
-   cansend can1 647#80FDFF7F000000C1
+   cansend can0 647#80FDFF7F000000C1
 
 Editer la config a la main :
    sudo nano /var/lib/boostgauge/config.json
@@ -345,13 +389,28 @@ EN CAS DE PROBLEME
 
 Probleme : "ssh: Could not resolve hostname boostgauge.local"
 Solution : trouve l'IP du Pi via le routeur, utilise l'IP
+           Avec DietPi, utiliser : ssh dietpi@<IP>
+           Avec Pi OS,   utiliser : ssh pi@<IP>
 
 Probleme : "ip link" ne montre pas can0/can1
-Solution : verifier /boot/firmware/config.txt contient bien les overlays
-           dtoverlay=mcp2515-can0,...
-           dtoverlay=mcp2515-can1,...
-           sinon relancer : sudo bash pi_setup/setup.sh
+Solution : verifier le fichier config.txt contient bien les overlays
+              DietPi  -> /boot/config.txt
+              Pi OS   -> /boot/firmware/config.txt
+           Ces lignes doivent etre presentes :
+              dtparam=spi=on
+              dtoverlay=mcp2515-can0,oscillator=12000000,interrupt=25
+              dtoverlay=mcp2515-can1,oscillator=12000000,interrupt=24
+           Si manquant, relancer : sudo bash pi_setup/setup.sh
            puis : sudo reboot
+
+Probleme : DietPi premier boot bloque ou n'avance pas
+Solution : patience, le 1er boot prend 8-15 min sur Pi Zero 2W.
+           Si vraiment bloque (>20 min), debrancher / rebrancher.
+           Re-verifier /boot/dietpi-wifi.txt (SSID + password corrects).
+
+Probleme : DietPi - "sudo apt update" ne marche pas
+Solution : sudo dietpi-update          (mettre a jour DietPi d'abord)
+           puis : sudo apt update
 
 Probleme : Service crash au boot (status "failed")
 Solution : voir les logs : journalctl -u boostgauge -n 100
