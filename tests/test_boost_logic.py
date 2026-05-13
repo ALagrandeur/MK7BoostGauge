@@ -361,6 +361,30 @@ def test_dead_zone_skip_continuous_no_freeze():
     assert plateaus <= 1, f"Too many plateaus ({plateaus}) — needle would freeze. Sequence: {bytes_seq}"
 
 
+def test_dead_zone_skip_NEVER_lands_in_dead_zone_after_round_trip():
+    """CRITICAL safety test: ensure NO MAP value produces a byte that the
+    cluster will display as a temperature inside the dead zone.
+
+    Without SAFE_MARGIN, boundary values rounded to bytes that decode back
+    inside dead zone (~0.18°C error per byte). With SAFE_MARGIN, boundaries
+    are pushed safely outside.
+    """
+    args = dict(map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130,
+                skip_dead_zone=True,
+                dead_zone_low_c=80, dead_zone_high_c=110)
+    bad_samples = []
+    for map_mbar in range(300, 2501, 5):  # 441 samples
+        b = map_mbar_to_motor09_byte(map_mbar=map_mbar, **args)
+        cluster_temp = motor09_byte_to_temp_c(b)
+        if 80 <= cluster_temp <= 110:
+            bad_samples.append((map_mbar, b, cluster_temp))
+    assert not bad_samples, (
+        f"Dead zone hits found ({len(bad_samples)}): {bad_samples[:3]}. "
+        "Cluster needle would freeze for these MAP values."
+    )
+
+
 def test_dead_zone_skip_custom_bounds():
     """Custom dead zone bounds should be honored."""
     # User has a different cluster with dead zone 75-115

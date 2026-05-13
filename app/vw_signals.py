@@ -247,9 +247,16 @@ def map_mbar_to_motor09_byte(
     )
 
     if spans_dead_zone:
-        # Useful length = bottom segment + top segment (skip dead zone middle)
-        len_bottom = dead_zone_low_c - temp_min_c
-        len_top    = temp_max_c - dead_zone_high_c
+        # Useful length = bottom segment + top segment (skip dead zone middle).
+        # SAFE_MARGIN: rounding from temp_C → byte → cluster_displayed_temp_C
+        # has ~0.18°C error per byte (formula step ≈ 0.7339°C). Without margin,
+        # boundary values land *inside* the dead zone by ~0.1°C → needle frozen.
+        # 1°C margin shifts both segments safely outside the dead zone.
+        SAFE_MARGIN = 1.0
+        safe_low  = dead_zone_low_c  - SAFE_MARGIN   # max temp in bottom segment
+        safe_high = dead_zone_high_c + SAFE_MARGIN   # min temp in top segment
+        len_bottom = safe_low - temp_min_c
+        len_top    = temp_max_c - safe_high
         total      = len_bottom + len_top
         if total <= 0:
             temp_c = (temp_min_c + temp_max_c) / 2
@@ -258,7 +265,7 @@ def map_mbar_to_motor09_byte(
             if useful_pos <= len_bottom:
                 temp_c = temp_min_c + useful_pos
             else:
-                temp_c = dead_zone_high_c + (useful_pos - len_bottom)
+                temp_c = safe_high + (useful_pos - len_bottom)
     else:
         # Plain linear (or curved) mapping across full [temp_min, temp_max]
         temp_c = temp_min_c + ratio * (temp_max_c - temp_min_c)
