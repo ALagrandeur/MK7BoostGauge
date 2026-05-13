@@ -17,7 +17,7 @@
 
     "cluster_iface": "can0",
     "can1_iface":    "can1",
-    "can1_mode":     "pcm",
+    "can1_mode":     "diagnostic",
     "_can1_mode_choices": ["pcm", "diagnostic"],
 
     "can1_listen_only": false,

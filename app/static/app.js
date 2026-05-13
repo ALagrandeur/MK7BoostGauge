@@ -98,6 +98,9 @@ function updateLive(s) {
   if (s.blocked_airbag       !== undefined) $("safety-blocked-airbag").textContent = s.blocked_airbag;
   if (s.blocked_pcm_mode     !== undefined) $("safety-blocked-pcm").textContent    = s.blocked_pcm_mode;
   if (s.blocked_listen_only  !== undefined) $("safety-blocked-listen").textContent = s.blocked_listen_only;
+
+  // Transmission Input card
+  updateTransmissionDisplay(s);
 }
 
 // ---------------- Save / Reset ----------------
@@ -225,10 +228,136 @@ document.querySelectorAll(".obd-btn").forEach(btn => {
   });
 });
 
+// ---------------- Transmission Input card ----------------
+
+function updateTransmissionDisplay(s) {
+  const lever = s.lever || "—";
+  const big = $("trans-lever-big");
+  if (big) big.textContent = lever;
+
+  const pill = $("trans-tx-pill");
+  if (pill) {
+    pill.textContent = s.mode;
+    pill.className = "pill pill-" + s.mode.toLowerCase();
+  }
+
+  const age = $("trans-age");
+  if (age) {
+    if (s.lever_age_s == null) {
+      age.textContent = "En attente d'une frame WBA_03 (0x394) sur Cluster CAN…";
+    } else {
+      const txt = s.mode === "BOOST"
+        ? `✅ TX Motor_09 ACTIF — boost mappé envoyé au cluster (frame WBA_03 vue il y a ${s.lever_age_s}s)`
+        : (s.mode === "TEMP"
+            ? `🟢 TX silencieux — gateway forwarde vraie temp (frame vue il y a ${s.lever_age_s}s)`
+            : `⏸ En attente WBA_03 (frame vue il y a ${s.lever_age_s}s)`);
+      age.textContent = txt;
+    }
+  }
+}
+
+// ---------------- Frame Log ----------------
+
+let framelogPaused = false;
+let currentChannel = "cluster";
+let currentView = "agg";
+let framelogTimer = null;
+
+function startFramelogPolling() {
+  if (framelogTimer) clearInterval(framelogTimer);
+  framelogTimer = setInterval(refreshFramelog, 500);
+  refreshFramelog();
+}
+
+async function refreshFramelog() {
+  if (framelogPaused) return;
+  const url = `/api/framelog/${currentChannel}?mode=${currentView}`;
+  try {
+    const r = await fetch(url);
+    const data = await r.json();
+    if (!data.ok) return;
+    renderFramelog(data.frames);
+  } catch (e) {
+    // ignore network errors during polling
+  }
+}
+
+function renderFramelog(frames) {
+  const thead = $("framelog-thead");
+  const tbody = $("framelog-tbody");
+  const cnt = $("framelog-count");
+  if (cnt) cnt.textContent = `(${frames.length})`;
+
+  if (!frames.length) {
+    thead.innerHTML = "";
+    tbody.innerHTML = `<tr><td class="muted small">En attente de frames sur ${currentChannel}…</td></tr>`;
+    return;
+  }
+
+  if (currentView === "agg") {
+    thead.innerHTML = `<tr><th>ID</th><th>Dir</th><th>Count</th><th>Age</th><th>Last data</th></tr>`;
+    tbody.innerHTML = frames.map(f => `
+      <tr>
+        <td class="framelog-id">${f.id_hex}</td>
+        <td class="framelog-dir-${f.dir}">${f.dir.toUpperCase()}</td>
+        <td class="framelog-count">${f.count}</td>
+        <td class="framelog-age">${f.age_s}s</td>
+        <td class="framelog-data">${f.last_data}</td>
+      </tr>
+    `).join("");
+  } else {
+    thead.innerHTML = `<tr><th>Time</th><th>ID</th><th>Dir</th><th>Data</th></tr>`;
+    // chronological — most recent first
+    const sorted = [...frames].reverse().slice(0, 50);
+    tbody.innerHTML = sorted.map(f => {
+      const t = new Date(f.ts * 1000);
+      const tstr = t.toLocaleTimeString("fr-CA", { hour12: false }) +
+                   "." + String(t.getMilliseconds()).padStart(3, "0");
+      return `
+        <tr>
+          <td class="muted">${tstr}</td>
+          <td class="framelog-id">${f.id_hex}</td>
+          <td class="framelog-dir-${f.dir}">${f.dir.toUpperCase()}</td>
+          <td class="framelog-data">${f.data}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+}
+
+document.querySelectorAll('input[name="framelog_channel"]').forEach(r => {
+  r.addEventListener("change", (e) => {
+    currentChannel = e.target.value;
+    refreshFramelog();
+  });
+});
+
+document.querySelectorAll('input[name="framelog_view"]').forEach(r => {
+  r.addEventListener("change", (e) => {
+    currentView = e.target.value;
+    refreshFramelog();
+  });
+});
+
+$("btn-framelog-pause")?.addEventListener("click", async () => {
+  framelogPaused = !framelogPaused;
+  $("btn-framelog-pause").textContent = framelogPaused ? "▶ Reprendre" : "⏸ Pause";
+  await fetch("/api/framelog/pause", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ paused: framelogPaused })
+  });
+});
+
+$("btn-framelog-clear")?.addEventListener("click", async () => {
+  await fetch("/api/framelog/clear", { method: "POST" });
+  refreshFramelog();
+});
+
 // ---------------- Initial fetch ----------------
 
 (async () => {
   const r = await fetch("/api/config");
   const cfg = await r.json();
   fillConfig(cfg);
+  startFramelogPolling();
 })();

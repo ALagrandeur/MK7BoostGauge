@@ -2,7 +2,8 @@
 import pytest
 
 from app.vw_signals import (
-    BOOST_LEVERS, build_motor_09, decode_lever, is_boost_mode,
+    BOOST_LEVERS, build_motor_09, decode_lever, decode_gear_digit,
+    decode_lever_with_gear, is_boost_mode,
     map_mbar_to_motor09_byte, motor09_byte_to_temp_c, temp_c_to_motor09_byte,
 )
 
@@ -32,6 +33,59 @@ def test_boost_mode_set():
         assert is_boost_mode(x)
     for x in ("D", "P", "R", None):
         assert not is_boost_mode(x)
+
+
+# ---------------- Gear digit decode + combined lever+gear ----------------
+
+@pytest.mark.parametrize("byte3_low_nibble,expected", [
+    (0x01, 1), (0x02, 2), (0x03, 3), (0x04, 4), (0x05, 5), (0x06, 6),
+    (0x00, None), (0x07, None), (0x0F, None),
+])
+def test_decode_gear_digit(byte3_low_nibble, expected):
+    payload = bytes([0, 0x50, 0, byte3_low_nibble, 0, 0, 0, 0])
+    assert decode_gear_digit(payload) == expected
+
+
+def test_decode_gear_digit_short_payload():
+    assert decode_gear_digit(b"") is None
+    assert decode_gear_digit(b"\x00\x00\x00") is None  # < 4 bytes
+
+
+@pytest.mark.parametrize("byte1,byte3,expected", [
+    (0x10, 0x00, "P"),     # P → no digit appended
+    (0x20, 0x00, "R"),
+    (0x30, 0x00, "N"),
+    (0x40, 0x01, "D1"),    # D + gear digit
+    (0x40, 0x06, "D6"),
+    (0x50, 0x03, "S3"),    # S + gear digit
+    (0x50, 0x05, "S5"),
+    (0x60, 0x02, "M2"),    # M + gear digit
+    (0x60, 0x06, "M6"),
+    (0x50, 0x00, "S"),     # S without digit (when invalid digit)
+    (0x60, 0x07, "M"),     # M with invalid digit → just lever
+])
+def test_decode_lever_with_gear(byte1, byte3, expected):
+    payload = bytes([0, byte1, 0, byte3, 0, 0, 0, 0])
+    assert decode_lever_with_gear(payload) == expected
+
+
+def test_decode_lever_with_gear_unknown_lever():
+    payload = bytes([0, 0x70, 0, 0x01, 0, 0, 0, 0])  # 0x70 = unknown
+    assert decode_lever_with_gear(payload) is None
+
+
+def test_is_boost_mode_with_combined_strings():
+    """is_boost_mode should accept combined lever+gear strings like 'S3', 'M5'."""
+    # All BOOST cases — N, S1-S6, M1-M6
+    for x in ("N", "S", "S1", "S2", "S3", "S4", "S5", "S6",
+              "M", "M1", "M2", "M3", "M4", "M5", "M6"):
+        assert is_boost_mode(x), f"{x} should be BOOST"
+    # All TEMP cases — P, R, D1-D6
+    for x in ("P", "R", "D", "D1", "D2", "D3", "D4", "D5", "D6"):
+        assert not is_boost_mode(x), f"{x} should NOT be BOOST"
+    # None
+    assert not is_boost_mode(None)
+    assert not is_boost_mode("")
 
 
 # ---------------- Coolant byte conversion ----------------

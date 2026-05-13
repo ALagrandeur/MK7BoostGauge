@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
 from typing import Callable, Optional
 
 try:
@@ -21,6 +22,9 @@ except ImportError:
 log = logging.getLogger(__name__)
 
 CHANNELS = ("cluster", "can1")
+
+# Frame log: ring buffer per channel of recent CAN frames (for web UI Frame Log card)
+FRAME_LOG_SIZE = 100   # last N frames per channel
 
 
 class CanManager:
@@ -58,6 +62,73 @@ class CanManager:
         self.blocked_listen_only_count = 0
         self.blocked_forbidden_count = 0
         self.blocked_pcm_mode_count = 0
+        # Frame Log: ring buffer of recent frames per channel (for UI display)
+        self.frame_log: dict[str, deque] = {
+            ch: deque(maxlen=FRAME_LOG_SIZE) for ch in CHANNELS
+        }
+        self._frame_log_lock = threading.Lock()
+        self._frame_log_paused = False
+        # Aggregated by ID: {channel: {can_id: {count, last_data, last_ts}}}
+        self.frame_agg: dict[str, dict[int, dict]] = {ch: {} for ch in CHANNELS}
+
+    # ------------------------------------------------------------------ frame log API
+
+    def get_frame_log(self, channel: str, since_ts: float = 0.0) -> list[dict]:
+        """Return the recent frames for a channel, optionally only those after since_ts.
+
+        Returns list of {"id": int, "data": "AABB..", "ts": float, "dir": "rx"/"tx"}.
+        """
+        if channel not in CHANNELS:
+            return []
+        with self._frame_log_lock:
+            return [f for f in self.frame_log[channel] if f["ts"] > since_ts]
+
+    def get_frame_aggregate(self, channel: str) -> list[dict]:
+        """Return per-ID summary: count, last_data, age_s."""
+        if channel not in CHANNELS:
+            return []
+        now = time.time()
+        with self._frame_log_lock:
+            return [
+                {
+                    "id": cid,
+                    "id_hex": f"0x{cid:03X}",
+                    "count": info["count"],
+                    "last_data": info["last_data"],
+                    "age_s": round(now - info["last_ts"], 2),
+                    "dir": info.get("dir", "rx"),
+                }
+                for cid, info in sorted(self.frame_agg[channel].items())
+            ]
+
+    def set_frame_log_paused(self, paused: bool) -> None:
+        with self._frame_log_lock:
+            self._frame_log_paused = bool(paused)
+
+    def clear_frame_log(self) -> None:
+        with self._frame_log_lock:
+            for ch in CHANNELS:
+                self.frame_log[ch].clear()
+                self.frame_agg[ch].clear()
+
+    def _record_frame(self, channel: str, can_id: int, data: bytes, direction: str = "rx") -> None:
+        if self._frame_log_paused:
+            return
+        ts = time.time()
+        data_hex = data.hex(" ").upper() if data else ""
+        with self._frame_log_lock:
+            self.frame_log[channel].append({
+                "id": can_id,
+                "id_hex": f"0x{can_id:03X}",
+                "data": data_hex,
+                "ts": ts,
+                "dir": direction,
+            })
+            agg = self.frame_agg[channel].setdefault(can_id, {"count": 0})
+            agg["count"] += 1
+            agg["last_data"] = data_hex
+            agg["last_ts"] = ts
+            agg["dir"] = direction
 
     def set_can1_listen_only(self, on: bool) -> None:
         if on != self._can1_listen_only:
@@ -163,6 +234,7 @@ class CanManager:
         msg = can.Message(arbitration_id=can_id, data=data, is_extended_id=extended)
         try:
             bus.send(msg, timeout=0.05)
+            self._record_frame(channel, can_id, data, direction="tx")
             return True
         except Exception as e:
             log.error("TX fail on %s id 0x%X: %s", channel, can_id, e)
@@ -192,6 +264,7 @@ class CanManager:
             if msg is None:
                 continue
             data = bytes(msg.data) if msg.data is not None else b""
+            self._record_frame(channel, msg.arbitration_id, data, direction="rx")
             for cb in self._listeners[channel]:
                 try:
                     cb(msg.arbitration_id, data, msg.timestamp)

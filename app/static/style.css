@@ -110,5 +110,46 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .mono { font-family: ui-monospace, monospace; }
 .safety-note { margin: 12px 0 0; font-size: 11px; line-height: 1.6; }
 
+/* Transmission Input card */
+.card-transmission { border-left: 4px solid var(--temp); }
+.trans-display { display: flex; gap: 14px; margin-bottom: 14px; }
+.trans-lever, .trans-tx { flex: 1; background: #131820; border-radius: 8px; padding: 14px;
+                          display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.trans-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+.trans-value { font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums;
+               color: var(--text); line-height: 1; }
+.trans-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.trans-row { background: #131820; border-radius: 6px; padding: 8px 12px; font-size: 13px; line-height: 1.6; }
+.trans-row.trans-active { border-left: 3px solid var(--boost); }
+.trans-row.trans-silent { border-left: 3px solid var(--temp); }
+.trans-tags { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-left: 6px; }
+.tag { padding: 2px 8px; border-radius: 4px; font-family: ui-monospace, monospace;
+       font-size: 11px; font-weight: 600; }
+.tag-boost { background: var(--boost); color: #fff; }
+.tag-temp  { background: var(--temp); color: #002918; }
+
+/* Frame Log card */
+.card-framelog { border-left: 4px solid #b288ff; }
+.framelog-controls { flex-wrap: wrap; }
+.framelog-channel { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+                    background: #131820; border: 1px solid var(--border); border-radius: 6px;
+                    padding: 6px 10px; cursor: pointer; font-size: 13px; color: var(--text); }
+.framelog-channel:has(input:checked) { border-color: var(--accent); background: #1a2332; }
+.framelog-channel input { accent-color: var(--accent); margin: 0; }
+.framelog-table { width: 100%; border-collapse: collapse; font-size: 12px;
+                  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+                  margin-top: 12px; max-height: 300px; }
+.framelog-table thead th { text-align: left; padding: 6px 8px; color: var(--muted);
+                            font-weight: 500; border-bottom: 1px solid var(--border); }
+.framelog-table tbody td { padding: 4px 8px; border-bottom: 1px solid #1a1f29;
+                           font-variant-numeric: tabular-nums; }
+.framelog-table tbody tr:hover { background: #131820; }
+.framelog-id { color: var(--accent); font-weight: 600; }
+.framelog-data { color: var(--text); word-break: break-all; }
+.framelog-dir-tx { color: var(--boost); }
+.framelog-dir-rx { color: var(--temp); }
+.framelog-age { color: var(--muted); }
+.framelog-count { color: var(--warning); font-variant-numeric: tabular-nums; }
+
 footer { display: flex; justify-content: space-between; padding: 12px 20px;
          border-top: 1px solid var(--border); margin-top: 20px; }

@@ -73,6 +73,40 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         os.system("sudo /sbin/reboot")
         return jsonify({"ok": True})
 
+    # ---------------- Frame Log endpoints ----------------
+
+    @app.route("/api/framelog/<channel>", methods=["GET"])
+    def api_framelog(channel):
+        """Return the recent frames for a channel (cluster or can1).
+
+        Query params:
+          ?since=<ts>   only return frames newer than this Unix timestamp (default 0)
+          ?mode=agg     return aggregated per-ID summary instead of raw list
+        """
+        if channel not in ("cluster", "can1"):
+            return jsonify({"ok": False, "error": "channel must be 'cluster' or 'can1'"}), 400
+        mode = request.args.get("mode", "list")
+        if mode == "agg":
+            return jsonify({"ok": True, "channel": channel,
+                            "frames": controller.can.get_frame_aggregate(channel)})
+        try:
+            since = float(request.args.get("since", 0))
+        except ValueError:
+            since = 0
+        return jsonify({"ok": True, "channel": channel,
+                        "frames": controller.can.get_frame_log(channel, since_ts=since)})
+
+    @app.route("/api/framelog/pause", methods=["POST"])
+    def api_framelog_pause():
+        body = request.get_json(force=True) or {}
+        controller.can.set_frame_log_paused(bool(body.get("paused", True)))
+        return jsonify({"ok": True, "paused": bool(body.get("paused", True))})
+
+    @app.route("/api/framelog/clear", methods=["POST"])
+    def api_framelog_clear():
+        controller.can.clear_frame_log()
+        return jsonify({"ok": True})
+
     # ---------------- OBD2 endpoints (Diagnostic mode only) ----------------
 
     def _reject_if_not_diagnostic():

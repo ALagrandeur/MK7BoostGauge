@@ -28,7 +28,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "can": {
         "cluster_iface": "can0",
         "can1_iface": "can1",
-        "can1_mode": "pcm",            # "pcm" or "diagnostic"
+        "can1_mode": "diagnostic",     # "pcm" or "diagnostic" — default = diagnostic (OBD-II tool)
         "can1_listen_only": False,     # SAFETY: when True, CAN1 is RX-only (no UDS query, no anything)
         "bitrate": 500000,
         "map_source": "auto",          # "auto" / "broadcast" / "uds"

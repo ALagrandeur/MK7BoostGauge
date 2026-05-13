@@ -10,7 +10,7 @@ from typing import Optional
 from .can_manager import CanManager
 from .config import Config
 from .vw_signals import (
-    BOOST_LEVERS, MOTOR_09_ID, build_motor_09, decode_lever, is_boost_mode,
+    BOOST_LEVERS, MOTOR_09_ID, build_motor_09, decode_lever_with_gear, is_boost_mode,
     map_mbar_to_motor09_byte, motor09_byte_to_temp_c,
     MAP_PCM_DECODER, REAL_COOLANT_PCM_DECODER, HALDEX_DEMAND_PCM_DECODER,
     decode_pcm_broadcast,
@@ -165,7 +165,7 @@ class BoostController:
             self.state.rx_cluster_count += 1
 
         if can_id == WBA_03_ID:
-            lever = decode_lever(data)
+            lever = decode_lever_with_gear(data)
             if lever:
                 with self.state.lock:
                     self.state.lever = lever

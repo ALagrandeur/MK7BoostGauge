@@ -34,8 +34,35 @@ def decode_lever(wba03_payload: bytes) -> str | None:
     return LEVER_TABLE.get(high_nibble)
 
 
+def decode_gear_digit(wba03_payload: bytes) -> Optional[int]:
+    """Return engaged gear digit 1..6 from WBA_03 byte 3 low nibble, or None.
+
+    Only meaningful in S/M/D mode. In P/R/N the digit is typically 0.
+    """
+    if not wba03_payload or len(wba03_payload) < 4:
+        return None
+    digit = wba03_payload[3] & 0x0F
+    if 1 <= digit <= 6:
+        return digit
+    return None
+
+
+def decode_lever_with_gear(wba03_payload: bytes) -> str | None:
+    """Combined decode: returns 'S3', 'M5', 'D2', 'P', 'R', 'N' or None."""
+    lever = decode_lever(wba03_payload)
+    if lever is None:
+        return None
+    digit = decode_gear_digit(wba03_payload)
+    if digit is not None and lever in ("S", "M", "D"):
+        return f"{lever}{digit}"
+    return lever
+
+
 def is_boost_mode(lever: str | None) -> bool:
-    return lever in BOOST_LEVERS
+    """True if lever indicates boost gauge active. Accepts 'S', 'S3', 'M', 'M2', 'N', etc."""
+    if not lever:
+        return False
+    return lever[0] in BOOST_LEVERS
 
 
 # ---------------------------------------------------------------------------

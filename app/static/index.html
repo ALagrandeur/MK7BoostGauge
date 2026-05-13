@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
 
@@ -58,6 +58,47 @@
       <span>Byte: <b id="live-byte">0x—</b></span>
       <span>TX: <b id="live-tx">0</b></span>
     </div>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Transmission Input (gear lever from CAN)
+       =================================================================== -->
+  <section class="card card-transmission">
+    <h2>🚦 Transmission — Input détecté</h2>
+    <p class="muted small">Lecture en direct de WBA_03 (0x394) sur le bus Cluster.
+       Détermine si l'override Motor_09 est ACTIF ou silencieux.</p>
+
+    <div class="trans-display">
+      <div class="trans-lever">
+        <span class="trans-label">Levier</span>
+        <span id="trans-lever-big" class="trans-value">—</span>
+      </div>
+      <div class="trans-tx" id="trans-tx-status">
+        <span class="trans-label">État TX cluster</span>
+        <span id="trans-tx-pill" class="pill pill-waiting">WAITING</span>
+      </div>
+    </div>
+
+    <div class="trans-grid">
+      <div class="trans-row trans-active">
+        <b>BOOST actif</b> (gauge = pression turbo) :
+        <span class="trans-tags">
+          <span class="tag tag-boost">N</span>
+          <span class="tag tag-boost">S1 S2 S3 S4 S5 S6</span>
+          <span class="tag tag-boost">M1 M2 M3 M4 M5 M6</span>
+        </span>
+      </div>
+      <div class="trans-row trans-silent">
+        <b>TX silencieux</b> (gauge = vraie temp via gateway) :
+        <span class="trans-tags">
+          <span class="tag tag-temp">P</span>
+          <span class="tag tag-temp">R</span>
+          <span class="tag tag-temp">D1 D2 D3 D4 D5 D6</span>
+        </span>
+      </div>
+    </div>
+
+    <p class="muted small" id="trans-age">En attente d'une frame WBA_03…</p>
   </section>
 
   <!-- ===================================================================
@@ -183,6 +224,45 @@
     </div>
   </section>
 
+  <!-- ===================================================================
+       CARD: Frame Log — recent CAN frames per channel
+       =================================================================== -->
+  <section class="card card-framelog">
+    <h2>📡 Frame Log <span id="framelog-count" class="muted small"></span></h2>
+    <p class="muted small">Dernières frames reçues/envoyées sur les 2 bus.
+       Pause = fige l'affichage pour examiner.</p>
+
+    <div class="row framelog-controls">
+      <label class="framelog-channel">
+        <input type="radio" name="framelog_channel" value="cluster" checked>
+        <span>CAN0 Cluster</span>
+      </label>
+      <label class="framelog-channel">
+        <input type="radio" name="framelog_channel" value="can1">
+        <span>CAN1</span>
+      </label>
+      <label class="framelog-channel">
+        <input type="radio" name="framelog_view" value="agg" checked>
+        <span>Vue agrégée (par ID)</span>
+      </label>
+      <label class="framelog-channel">
+        <input type="radio" name="framelog_view" value="list">
+        <span>Vue chronologique</span>
+      </label>
+    </div>
+    <div class="actions">
+      <button id="btn-framelog-pause">⏸ Pause</button>
+      <button id="btn-framelog-clear" class="secondary">🗑 Clear</button>
+    </div>
+
+    <table class="framelog-table">
+      <thead id="framelog-thead"></thead>
+      <tbody id="framelog-tbody">
+        <tr><td colspan="5" class="muted small">En attente de frames…</td></tr>
+      </tbody>
+    </table>
+  </section>
+
 </main>
 
 <footer>
@@ -191,6 +271,6 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/app.js?v=2"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>
