@@ -4,7 +4,8 @@ const $ = (id) => document.getElementById(id);
 const socket = io();
 
 const CFG_FIELDS = ["map_min_mbar", "map_max_mbar", "temp_min_c", "temp_max_c",
-                    "scale", "offset_c", "tx_rate_hz", "formula"];
+                    "scale", "offset_c", "tx_rate_hz", "formula",
+                    "skip_dead_zone", "dead_zone_low_c", "dead_zone_high_c"];
 
 let currentMode = "pcm";
 let currentListenOnly = false;
@@ -19,7 +20,12 @@ socket.on("state",  (s)   => updateLive(s));
 function fillConfig(cfg) {
   CFG_FIELDS.forEach(f => {
     const el = $("cfg-" + f);
-    if (el && cfg[f] !== undefined) el.value = cfg[f];
+    if (!el || cfg[f] === undefined) return;
+    if (el.type === "checkbox") {
+      el.checked = !!cfg[f];
+    } else {
+      el.value = cfg[f];
+    }
   });
 
   const mode = cfg?.can?.can1_mode || "pcm";
@@ -116,6 +122,10 @@ $("btn-save").addEventListener("click", async () => {
   CFG_FIELDS.forEach(f => {
     const el = $("cfg-" + f);
     if (!el) return;
+    if (el.type === "checkbox") {
+      patch[f] = el.checked;
+      return;
+    }
     const v = el.value;
     if (v === "") return;
     if (f === "formula") patch[f] = v;
@@ -136,7 +146,8 @@ $("btn-reset").addEventListener("click", async () => {
   const defaults = {
     map_min_mbar: 300, map_max_mbar: 2500,
     temp_min_c: 50, temp_max_c: 130,
-    scale: 1.0, offset_c: 0, tx_rate_hz: 25, formula: "linear"
+    scale: 1.0, offset_c: 0, tx_rate_hz: 25, formula: "linear",
+    skip_dead_zone: true, dead_zone_low_c: 80, dead_zone_high_c: 110
   };
   await fetch("/api/config", {
     method: "POST", headers: {"Content-Type": "application/json"},

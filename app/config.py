@@ -25,6 +25,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "offset_c": 0,
     "tx_rate_hz": 25,
     "formula": "linear",   # "linear" | "exp" | "sqrt"
+    # Cluster gauge dead zone skip (CRITICAL for boost gauge UX):
+    # The MQB needle stays planted at center for ANY temp in [80°C, 110°C].
+    # When True, the mapping splits MAP range over [temp_min, dead_low] +
+    # [dead_high, temp_max] so the needle never freezes mid-MAP.
+    "skip_dead_zone": True,
+    "dead_zone_low_c":  80,
+    "dead_zone_high_c": 110,
     "can": {
         "cluster_iface": "can0",
         "can1_iface": "can1",

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=4">
+<link rel="stylesheet" href="/style.css?v=5">
 </head>
 <body>
 
@@ -45,6 +45,24 @@
         </select>
       </label>
       <label>Fréquence TX (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1"></label>
+    </div>
+
+    <div class="dead-zone-section">
+      <label class="switch-row dead-zone-switch">
+        <input type="checkbox" id="cfg-skip_dead_zone">
+        <span class="switch-text">
+          <b>Sauter la zone morte du cluster</b>
+          <br><span class="small muted">
+            Le cluster MQB fige l'aiguille pour toute température entre les bornes
+            ci-dessous (~80-110°C). Quand activé, la mapping MAP→°C saute cette
+            zone : aiguille bouge en continu sur toute la plage MAP.
+          </span>
+        </span>
+      </label>
+      <div class="row">
+        <label>Zone morte BAS (°C) <input type="number" id="cfg-dead_zone_low_c" min="50" max="100" step="1"></label>
+        <label>Zone morte HAUT (°C) <input type="number" id="cfg-dead_zone_high_c" min="100" max="130" step="1"></label>
+      </div>
     </div>
     <div class="actions">
       <button id="btn-save">💾 Sauvegarder</button>
@@ -309,6 +327,6 @@
 </footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/app.js?v=4"></script>
+<script src="/app.js?v=5"></script>
 </body>
 </html>

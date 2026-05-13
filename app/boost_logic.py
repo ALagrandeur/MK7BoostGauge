@@ -297,6 +297,9 @@ class BoostController:
                 scale=cfg.get("scale", 1.0),
                 offset_c=cfg.get("offset_c", 0),
                 formula=cfg.get("formula", "linear"),
+                skip_dead_zone=bool(cfg.get("skip_dead_zone", True)),
+                dead_zone_low_c=float(cfg.get("dead_zone_low_c", 80)),
+                dead_zone_high_c=float(cfg.get("dead_zone_high_c", 110)),
             )
             payload = build_motor_09(byte0)
             ok = self.can.send(CH_CLUSTER, MOTOR_09_ID, payload)

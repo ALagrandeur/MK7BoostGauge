@@ -128,6 +128,13 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .tag-boost { background: var(--boost); color: #fff; }
 .tag-temp  { background: var(--temp); color: #002918; }
 
+/* Dead zone skip section in CAN0 card */
+.dead-zone-section { background: #131820; border-radius: 8px; padding: 12px;
+                     margin: 10px 0; border: 1px solid var(--border); }
+.dead-zone-switch { background: transparent; border: none; padding: 4px 0;
+                    margin-bottom: 8px; cursor: pointer; box-shadow: none; }
+.dead-zone-switch:has(input:checked) { background: transparent; box-shadow: none; }
+
 /* Test Mode card */
 .card-testmode { border-left: 4px solid #ff8c00; background: #1c1814; }
 .testmode-banner { background: #ff8c00; color: #1c1814; font-weight: 700;

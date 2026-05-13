@@ -177,6 +177,25 @@ def decode_pcm_broadcast(can_id: int, data: bytes, decoder: dict) -> Optional[fl
 # Mapping function (CAN0 cluster Motor_09)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# CRITICAL: Cluster dead zone (gauge damping)
+# ---------------------------------------------------------------------------
+# Empirically confirmed on 5G1 920 740B (Alltrack 2017): the MQB cluster applies
+# a "neutral zone" on the temperature gauge between ~80°C and ~110°C — the
+# needle stays planted at the center "90°C" mark for ANY real temperature in
+# that range, regardless of the value sent.
+#
+# For the boost gauge use case, this means a naive linear MAP→°C mapping that
+# spans the dead zone (e.g. 50→130°C) will cause the needle to FREEZE in the
+# middle of the MAP range. Map MAP to (50→80°C) ∪ (110→130°C) instead, skipping
+# the dead zone entirely → continuous needle motion across full MAP range.
+#
+# Reference: docs/mqb_can_ids.md "Zone neutre du cluster (gauge damping)"
+
+CLUSTER_DEAD_ZONE_LOW_C = 80.0
+CLUSTER_DEAD_ZONE_HIGH_C = 110.0
+
+
 def map_mbar_to_motor09_byte(
     map_mbar: float,
     map_min_mbar: float,
@@ -186,31 +205,64 @@ def map_mbar_to_motor09_byte(
     scale: float = 1.0,
     offset_c: float = 0.0,
     formula: str = "linear",
+    skip_dead_zone: bool = True,
+    dead_zone_low_c: float = CLUSTER_DEAD_ZONE_LOW_C,
+    dead_zone_high_c: float = CLUSTER_DEAD_ZONE_HIGH_C,
 ) -> int:
     """
     Map a MAP pressure (mbar) into a Motor_09 byte 0 value via configurable bounds.
 
-    Interpolation between (map_min → temp_min) and (map_max → temp_max),
-    then apply scale & offset, then convert °C to byte.
+    Steps:
+      1. Compute ratio (0..1) of MAP within [map_min, map_max], clamped.
+      2. Apply formula curve (linear / exp / sqrt) to the ratio.
+      3. If skip_dead_zone AND the [temp_min, temp_max] range spans the cluster
+         dead zone [dead_zone_low_c, dead_zone_high_c], split the useful needle
+         range into 2 segments [temp_min, dead_low] and [dead_high, temp_max],
+         then map ratio across the combined useful length. The needle "jumps"
+         past the dead zone without stalling.
+      4. Apply scale + offset_c.
+      5. Convert °C → byte via temp_c_to_motor09_byte (clamped 0..255).
 
     Formula choices:
-      'linear'      : straight line interpolation (default)
-      'exp'         : exponential — gauge ramps faster as MAP goes up (drama)
-      'sqrt'        : square-root — gauge moves more at low MAP (sensitivity)
-
-    Clamped to byte range 0..255.
+      'linear' : straight line (default)
+      'exp'    : ratio² → gauge ramps faster at high MAP (drama)
+      'sqrt'   : √ratio → gauge moves more at low MAP (sensitivity)
     """
+    # --- step 1+2: ratio in [0,1] with curve
     if map_max_mbar == map_min_mbar:
-        temp_c = (temp_min_c + temp_max_c) / 2
+        ratio = 0.5
     else:
         ratio = (map_mbar - map_min_mbar) / (map_max_mbar - map_min_mbar)
         ratio = max(0.0, min(1.0, ratio))
         if formula == "exp":
-            ratio = ratio * ratio          # 0..1 → curved more at top
+            ratio = ratio * ratio
         elif formula == "sqrt":
-            ratio = ratio ** 0.5           # 0..1 → curved more at bottom
-        # else "linear" (and unknown values fall back to linear)
+            ratio = ratio ** 0.5
+
+    # --- step 3: skip dead zone if enabled and applicable
+    spans_dead_zone = (
+        skip_dead_zone
+        and temp_min_c < dead_zone_low_c
+        and temp_max_c > dead_zone_high_c
+    )
+
+    if spans_dead_zone:
+        # Useful length = bottom segment + top segment (skip dead zone middle)
+        len_bottom = dead_zone_low_c - temp_min_c
+        len_top    = temp_max_c - dead_zone_high_c
+        total      = len_bottom + len_top
+        if total <= 0:
+            temp_c = (temp_min_c + temp_max_c) / 2
+        else:
+            useful_pos = ratio * total
+            if useful_pos <= len_bottom:
+                temp_c = temp_min_c + useful_pos
+            else:
+                temp_c = dead_zone_high_c + (useful_pos - len_bottom)
+    else:
+        # Plain linear (or curved) mapping across full [temp_min, temp_max]
         temp_c = temp_min_c + ratio * (temp_max_c - temp_min_c)
 
+    # --- step 4 + 5: scale, offset, convert
     temp_c = temp_c * scale + offset_c
     return temp_c_to_motor09_byte(temp_c)

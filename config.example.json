@@ -12,6 +12,11 @@
   "formula": "linear",
   "_formula_choices": ["linear", "exp", "sqrt"],
 
+  "skip_dead_zone": true,
+  "_skip_dead_zone_help": "MQB cluster needle freezes for temp in [80,110]°C. When true, mapping splits MAP range over [50,80] + [110,130] to skip the dead zone — needle moves continuously across full MAP range.",
+  "dead_zone_low_c":  80,
+  "dead_zone_high_c": 110,
+
   "can": {
     "_comment": "CAN0 = always Cluster bus. CAN1 = either PCM (Powertrain) or Diagnostic (OBD-II) — togglable in UI without rebooting.",
 

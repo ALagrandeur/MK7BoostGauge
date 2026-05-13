@@ -139,14 +139,27 @@ def test_map_mapping_high():
     assert b == temp_c_to_motor09_byte(130)
 
 
-def test_map_mapping_mid():
-    """At midpoint MAP, output should equal byte for midpoint temp."""
+def test_map_mapping_mid_no_skip_linear_through_dead_zone():
+    """Without dead zone skip, midpoint MAP → linear midpoint temp (90°C)."""
     b = map_mbar_to_motor09_byte(
         map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
         temp_min_c=50, temp_max_c=130,
+        skip_dead_zone=False,  # explicit: test the LINEAR pass-through behavior
     )
     expected = temp_c_to_motor09_byte(90)
     assert abs(b - expected) <= 1
+
+
+def test_map_mapping_mid_with_skip_jumps_dead_zone():
+    """With dead zone skip (default), midpoint MAP → ~75°C (just below dead zone)."""
+    b = map_mbar_to_motor09_byte(
+        map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+        temp_min_c=50, temp_max_c=130,
+        # skip_dead_zone defaults to True
+    )
+    temp = motor09_byte_to_temp_c(b)
+    # ratio=0.5, useful_pos=25, < bottom_seg_len=30, → temp = 50 + 25 = 75°C
+    assert 73 <= temp <= 77, f"Expected ~75°C with skip, got {temp}"
 
 
 def test_map_mapping_clamp_below():
@@ -180,12 +193,26 @@ def test_map_mapping_offset():
     assert 12 <= (plus10 - base) <= 16
 
 
-def test_map_mapping_div_zero_safe():
+def test_map_mapping_div_zero_safe_no_skip():
+    """When map_min == map_max and no skip, fall back to midpoint temp."""
     b = map_mbar_to_motor09_byte(
         map_mbar=1000, map_min_mbar=500, map_max_mbar=500,
         temp_min_c=50, temp_max_c=130,
+        skip_dead_zone=False,
     )
     assert b == temp_c_to_motor09_byte(90)
+
+
+def test_map_mapping_div_zero_safe_with_skip():
+    """When map_min == map_max with skip, ratio=0.5 → useful_pos in bottom segment."""
+    b = map_mbar_to_motor09_byte(
+        map_mbar=1000, map_min_mbar=500, map_max_mbar=500,
+        temp_min_c=50, temp_max_c=130,
+        skip_dead_zone=True,
+    )
+    # ratio=0.5, useful_pos=25, < bottom_seg_len=30 → temp ≈ 75°C
+    temp = motor09_byte_to_temp_c(b)
+    assert 73 <= temp <= 77
 
 
 # ---------------- Formula choice ----------------
@@ -244,3 +271,104 @@ def test_unknown_formula_falls_back_to_linear():
     b_lin = map_mbar_to_motor09_byte(**args, formula="linear")
     b_garbage = map_mbar_to_motor09_byte(**args, formula="nonexistent")
     assert b_lin == b_garbage
+
+
+# ---------------- Cluster dead zone skip (CRITICAL for boost gauge UX) ----------------
+# The MQB cluster freezes the needle for any temp in [80, 110]°C.
+# Without skip: linear MAP→°C maps midpoint to ~90°C → needle frozen at center.
+# With skip: midpoint MAP maps to either ~80°C or ~110°C (just outside dead zone)
+# → needle continuously moves across full MAP range.
+
+def test_dead_zone_skip_disabled_passes_through_dead_zone():
+    """Without skip, midpoint MAP → ~90°C (right in the dead zone)."""
+    b = map_mbar_to_motor09_byte(
+        map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+        temp_min_c=50, temp_max_c=130,
+        skip_dead_zone=False,
+    )
+    # 90°C → byte ≈ 182 = 0xB6. This would freeze the needle in real cluster.
+    expected = temp_c_to_motor09_byte(90)
+    assert b == expected, f"Without skip, midpoint should give 90°C byte 0x{expected:X}, got 0x{b:X}"
+
+
+def test_dead_zone_skip_enabled_jumps_past_dead_zone():
+    """With skip, MAP just below midpoint → ~80°C (just under dead zone)."""
+    args = dict(map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130,
+                skip_dead_zone=True,
+                dead_zone_low_c=80, dead_zone_high_c=110)
+
+    # bottom segment len = 80-50 = 30°C, top segment len = 130-110 = 20°C
+    # total useful = 50°C ; ratio at boundary = 30/50 = 0.6
+    # MAP at boundary = 300 + 0.6 * 2200 = 1620 mbar
+
+    # Just below boundary (ratio 0.59) → temp ~50 + 0.59*50 = 79.5°C (just below 80)
+    b_below = map_mbar_to_motor09_byte(map_mbar=1620 - 50, **args)
+    temp_below = motor09_byte_to_temp_c(b_below)
+    assert 75 <= temp_below <= 80, f"Below boundary should give ~78°C, got {temp_below}"
+
+    # Just above boundary (ratio 0.61) → temp jumps to ~110°C (above dead zone)
+    b_above = map_mbar_to_motor09_byte(map_mbar=1620 + 50, **args)
+    temp_above = motor09_byte_to_temp_c(b_above)
+    assert 110 <= temp_above <= 115, f"Above boundary should give ~111°C, got {temp_above}"
+
+    # Critical: there's a JUMP of >25°C across this boundary (skipping dead zone)
+    assert temp_above - temp_below >= 25, "Should skip dead zone with a visible jump"
+
+
+def test_dead_zone_skip_endpoints_unchanged():
+    """Skip behavior must NOT alter the endpoints (50 and 130°C must still hit byte 50 and 130)."""
+    args = dict(map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130,
+                skip_dead_zone=True)
+    # MAP at min → temp_min
+    b_min = map_mbar_to_motor09_byte(map_mbar=300, **args)
+    assert b_min == temp_c_to_motor09_byte(50)
+    # MAP at max → temp_max
+    b_max = map_mbar_to_motor09_byte(map_mbar=2500, **args)
+    assert b_max == temp_c_to_motor09_byte(130)
+
+
+def test_dead_zone_skip_no_effect_when_range_outside_dead_zone():
+    """If temp_min > dead_high or temp_max < dead_low, no skip needed → same as plain linear."""
+    args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+                scale=1.0, offset_c=0)
+    # Whole range above dead zone
+    b_skip = map_mbar_to_motor09_byte(temp_min_c=115, temp_max_c=135,
+                                       skip_dead_zone=True, **args)
+    b_no   = map_mbar_to_motor09_byte(temp_min_c=115, temp_max_c=135,
+                                       skip_dead_zone=False, **args)
+    assert b_skip == b_no
+    # Whole range below dead zone
+    b_skip = map_mbar_to_motor09_byte(temp_min_c=40, temp_max_c=75,
+                                       skip_dead_zone=True, **args)
+    b_no   = map_mbar_to_motor09_byte(temp_min_c=40, temp_max_c=75,
+                                       skip_dead_zone=False, **args)
+    assert b_skip == b_no
+
+
+def test_dead_zone_skip_continuous_no_freeze():
+    """Sweep MAP across full range with skip — verify no consecutive identical bytes."""
+    args = dict(map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130,
+                skip_dead_zone=True)
+    bytes_seq = []
+    for map_mbar in range(300, 2501, 50):  # ~45 samples
+        bytes_seq.append(map_mbar_to_motor09_byte(map_mbar=map_mbar, **args))
+    # The sequence should be strictly monotonic (no plateaus)
+    plateaus = sum(1 for i in range(1, len(bytes_seq)) if bytes_seq[i] == bytes_seq[i-1])
+    # Allow at most 1 plateau (at the dead-zone boundary jump where adjacent bytes might coincide)
+    assert plateaus <= 1, f"Too many plateaus ({plateaus}) — needle would freeze. Sequence: {bytes_seq}"
+
+
+def test_dead_zone_skip_custom_bounds():
+    """Custom dead zone bounds should be honored."""
+    # User has a different cluster with dead zone 75-115
+    args = dict(map_mbar=1400, map_min_mbar=300, map_max_mbar=2500,
+                temp_min_c=50, temp_max_c=130,
+                skip_dead_zone=True,
+                dead_zone_low_c=75, dead_zone_high_c=115)
+    b = map_mbar_to_motor09_byte(**args)
+    temp = motor09_byte_to_temp_c(b)
+    # bottom seg len = 25, top seg len = 15, total = 40, ratio=0.5 → useful_pos=20 < 25 → temp = 50+20 = 70
+    assert 68 <= temp <= 72, f"Expected ~70°C with custom bounds, got {temp}"
