@@ -30,7 +30,12 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
 
     @app.route("/")
     def index():
-        return send_from_directory(STATIC_DIR, "index.html")
+        # No-cache on the index so the ?v=N query string in <script src>
+        # is always re-evaluated (fixes mobile browser cache stickiness).
+        response = send_from_directory(STATIC_DIR, "index.html")
+        response.headers["Cache-Control"] = "no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        return response
 
     @app.route("/api/config", methods=["GET"])
     def api_get_config():
@@ -60,6 +65,9 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         # Hot-apply CAN1 listen-only flag to the live CanManager
         if "can" in patch and "can1_listen_only" in patch["can"]:
             controller.can.set_can1_listen_only(bool(patch["can"]["can1_listen_only"]))
+
+        # Broadcast updated config to all connected clients (multi-tab sync)
+        socketio.emit("config", config.data)
 
         return jsonify({"ok": True, "config": config.data})
 

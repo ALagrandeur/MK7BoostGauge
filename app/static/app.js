@@ -7,6 +7,17 @@ const CFG_FIELDS = ["map_min_mbar", "map_max_mbar", "temp_min_c", "temp_max_c",
                     "scale", "offset_c", "tx_rate_hz", "formula",
                     "skip_dead_zone", "dead_zone_low_c", "dead_zone_high_c"];
 
+// Hardcoded fallback values — used if backend returns sparse config (e.g.
+// older /var/lib/boostgauge/config.json that doesn't have all new fields).
+// Prevents inputs from showing as empty after page restore / bfcache.
+const CFG_DEFAULTS = {
+  map_min_mbar: 300, map_max_mbar: 2500,
+  temp_min_c: 50,   temp_max_c: 130,
+  scale: 1.0, offset_c: 0, tx_rate_hz: 25,
+  formula: "linear",
+  skip_dead_zone: true, dead_zone_low_c: 80, dead_zone_high_c: 110,
+};
+
 let currentMode = "pcm";
 let currentListenOnly = false;
 
@@ -18,13 +29,18 @@ socket.on("config", (cfg) => fillConfig(cfg));
 socket.on("state",  (s)   => updateLive(s));
 
 function fillConfig(cfg) {
+  cfg = cfg || {};
   CFG_FIELDS.forEach(f => {
     const el = $("cfg-" + f);
-    if (!el || cfg[f] === undefined) return;
+    if (!el) return;
+    // Use cfg value, fall back to hardcoded default if missing
+    let v = cfg[f];
+    if (v === undefined || v === null) v = CFG_DEFAULTS[f];
+    if (v === undefined) return;
     if (el.type === "checkbox") {
-      el.checked = !!cfg[f];
+      el.checked = !!v;
     } else {
-      el.value = cfg[f];
+      el.value = v;
     }
   });
 
@@ -442,9 +458,37 @@ refreshTestmodeBytePreview();
 
 // ---------------- Initial fetch ----------------
 
+async function refreshAllFromServer() {
+  try {
+    const r = await fetch("/api/config", { cache: "no-store" });
+    const cfg = await r.json();
+    fillConfig(cfg);
+  } catch (e) {
+    console.error("Could not fetch /api/config:", e);
+    // Fall back to defaults so inputs are never empty
+    fillConfig({});
+  }
+}
+
+// First load
 (async () => {
-  const r = await fetch("/api/config");
-  const cfg = await r.json();
-  fillConfig(cfg);
+  await refreshAllFromServer();
   startFramelogPolling();
 })();
+
+// Mobile browser bfcache restore: when the user navigates back to the page,
+// the JS may not re-run. pageshow with persisted=true means we came from cache.
+// Re-fetch to ensure inputs are populated.
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) {
+    console.log("pageshow from bfcache — refetching config");
+    refreshAllFromServer();
+  }
+});
+
+// Also refetch when tab becomes visible (catches some Android Chrome cases)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    refreshAllFromServer();
+  }
+});
