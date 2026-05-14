@@ -116,12 +116,36 @@ sudo -u "$PI_USER" python3 -m venv "$VENV_DIR"
 sudo -u "$PI_USER" "$VENV_DIR/bin/pip" install --upgrade pip wheel
 sudo -u "$PI_USER" "$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
 
-echo "==> [6/8] Install systemd service"
+echo "==> [6/9] Install boot-time auto-update service"
+# Runs ONCE at boot, BEFORE boostgauge.service. Tries home WiFi briefly,
+# pulls GitHub updates if newer commits exist, then switches to AP mode.
+# Falls through silently to AP mode if no home WiFi available.
+cat > /etc/systemd/system/boostgauge-autoupdate.service <<EOF
+[Unit]
+Description=MK7BoostGauge — boot-time GitHub auto-updater
+After=NetworkManager.service
+Wants=NetworkManager.service
+Before=boostgauge.service
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+TimeoutStartSec=180
+ExecStart=/bin/bash $PROJECT_DIR/pi_setup/autoupdate.sh
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable boostgauge-autoupdate.service
+
+echo "==> [7/9] Install main systemd service"
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=MK7BoostGauge standalone in-car boost gauge
-After=network.target can-up.service
-Wants=can-up.service
+After=network.target can-up.service boostgauge-autoupdate.service
+Wants=can-up.service boostgauge-autoupdate.service
 
 [Service]
 Type=simple
@@ -152,14 +176,18 @@ EOF
 systemctl daemon-reload
 systemctl enable boostgauge.service
 
-echo "==> [7/8] (Optional) WiFi AP setup — uncomment block in this script if you want it"
+echo "==> [8/9] (Optional) WiFi AP setup — uncomment block in this script if you want it"
 # bash "$PROJECT_DIR/pi_setup/ap_setup.sh"
 
-echo "==> [8/8] Done!"
+echo "==> [9/9] Done!"
 echo ""
 echo "    NEXT STEPS:"
 echo "    1. REBOOT the Pi: sudo reboot"
 echo "    2. After reboot, verify CAN: ip -br link show | grep can"
-echo "    3. Service should be running: systemctl status boostgauge"
-echo "    4. Logs: journalctl -u boostgauge -f"
+echo "    3. Main service: systemctl status boostgauge"
+echo "    4. Auto-update logs: cat /var/log/boostgauge-autoupdate.log"
+echo "    5. To DISABLE auto-update temporarily:"
+echo "         sudo touch /var/lib/boostgauge/disable_autoupdate"
+echo "       To RE-ENABLE:"
+echo "         sudo rm /var/lib/boostgauge/disable_autoupdate"
 echo ""

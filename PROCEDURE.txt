@@ -327,6 +327,46 @@ Cliquer "Sauvegarder" - la config persiste apres reboot.
 
 
 ----------------------------------------------------------------
+AUTO-UPDATE AU BOOT
+----------------------------------------------------------------
+
+A chaque demarrage du Pi, le service "boostgauge-autoupdate" se lance
+AUTOMATIQUEMENT avant l'application principale. Comportement :
+
+   1. Cherche un WiFi maison sauvegarde dans NetworkManager
+   2. Si trouve + connecte avec internet :
+        - git fetch sur GitHub
+        - Si nouveau commit : git pull + pip install (si requirements.txt
+          a change) + reboot (si setup.sh a change)
+        - Si pareil : ne fait rien
+   3. Si pas de WiFi maison ou pas d'internet :
+        - Skip update silencieusement
+        - Garde la version actuelle du code
+   4. Dans TOUS les cas : passe en mode AP (MK7-BoostGauge / boost123)
+        et lance le service principal
+
+Donc :
+   - Pi a la maison (sur WiFi connu) au boot   -> auto-update
+   - Pi en voiture (pas de WiFi maison)         -> mode auto direct
+
+Voir le journal d'auto-update :
+   cat /var/log/boostgauge-autoupdate.log
+
+Desactiver temporairement l'auto-update (ex: pour debug) :
+   sudo touch /var/lib/boostgauge/disable_autoupdate
+   sudo reboot
+   # Au prochain boot, autoupdate skippe + va direct en AP
+
+Re-activer :
+   sudo rm /var/lib/boostgauge/disable_autoupdate
+   sudo reboot
+
+Forcer un update tout de suite (sans rebooter) :
+   sudo bash /home/pi/MK7BoostGauge/pi_setup/autoupdate.sh
+   sudo systemctl restart boostgauge
+
+
+----------------------------------------------------------------
 COMMANDES UTILES
 ----------------------------------------------------------------
 
