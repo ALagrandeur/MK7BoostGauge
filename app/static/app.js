@@ -459,12 +459,21 @@ refreshTestmodeBytePreview();
 // ---------------- Initial fetch ----------------
 
 async function refreshAllFromServer() {
+  const banner = $("fetch-error-banner");
+  const detail = $("fetch-error-detail");
   try {
     const r = await fetch("/api/config", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
     const cfg = await r.json();
     fillConfig(cfg);
+    if (banner) banner.style.display = "none";
   } catch (e) {
     console.error("Could not fetch /api/config:", e);
+    // Show visible error banner
+    if (banner) {
+      banner.style.display = "block";
+      if (detail) detail.textContent = "Erreur: " + e.message;
+    }
     // Fall back to defaults so inputs are never empty
     fillConfig({});
   }

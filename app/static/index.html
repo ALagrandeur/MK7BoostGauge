@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=6">
+<link rel="stylesheet" href="/style.css?v=7">
 </head>
 <body>
 
@@ -25,31 +25,31 @@
        <code>MAP (mbar) → byte coolant cluster</code>.</p>
 
     <div class="row">
-      <label>MAP min (mbar) <input type="number" id="cfg-map_min_mbar" min="0" max="4000" step="10"></label>
-      <label>MAP max (mbar) <input type="number" id="cfg-map_max_mbar" min="0" max="4000" step="10"></label>
+      <label>MAP min (mbar) <input type="number" id="cfg-map_min_mbar" min="0" max="4000" step="10" value="300"></label>
+      <label>MAP max (mbar) <input type="number" id="cfg-map_max_mbar" min="0" max="4000" step="10" value="2500"></label>
     </div>
     <div class="row">
-      <label>Temp min (°C) <input type="number" id="cfg-temp_min_c" min="0" max="150" step="1"></label>
-      <label>Temp max (°C) <input type="number" id="cfg-temp_max_c" min="0" max="150" step="1"></label>
+      <label>Temp min (°C) <input type="number" id="cfg-temp_min_c" min="0" max="150" step="1" value="50"></label>
+      <label>Temp max (°C) <input type="number" id="cfg-temp_max_c" min="0" max="150" step="1" value="130"></label>
     </div>
     <div class="row">
-      <label>Scale <input type="number" id="cfg-scale" min="0.1" max="3.0" step="0.05"></label>
-      <label>Offset (°C) <input type="number" id="cfg-offset_c" min="-50" max="50" step="1"></label>
+      <label>Scale <input type="number" id="cfg-scale" min="0.1" max="3.0" step="0.05" value="1.0"></label>
+      <label>Offset (°C) <input type="number" id="cfg-offset_c" min="-50" max="50" step="1" value="0"></label>
     </div>
     <div class="row">
       <label>Formule
         <select id="cfg-formula">
-          <option value="linear">Linéaire (par défaut)</option>
+          <option value="linear" selected>Linéaire (par défaut)</option>
           <option value="exp">Exponentielle (drame)</option>
           <option value="sqrt">Racine carrée (sensibilité basse)</option>
         </select>
       </label>
-      <label>Fréquence TX (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1"></label>
+      <label>Fréquence TX (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1" value="25"></label>
     </div>
 
     <div class="dead-zone-section">
       <label class="switch-row dead-zone-switch">
-        <input type="checkbox" id="cfg-skip_dead_zone">
+        <input type="checkbox" id="cfg-skip_dead_zone" checked>
         <span class="switch-text">
           <b>Sauter la zone morte du cluster</b>
           <br><span class="small muted">
@@ -60,8 +60,8 @@
         </span>
       </label>
       <div class="row">
-        <label>Zone morte BAS (°C) <input type="number" id="cfg-dead_zone_low_c" min="50" max="100" step="1"></label>
-        <label>Zone morte HAUT (°C) <input type="number" id="cfg-dead_zone_high_c" min="100" max="130" step="1"></label>
+        <label>Zone morte BAS (°C) <input type="number" id="cfg-dead_zone_low_c" min="50" max="100" step="1" value="80"></label>
+        <label>Zone morte HAUT (°C) <input type="number" id="cfg-dead_zone_high_c" min="100" max="130" step="1" value="110"></label>
       </div>
     </div>
     <div class="actions">
@@ -323,10 +323,18 @@
 
 <footer>
   <span id="conn-status" class="muted">Connexion…</span>
-  <span class="muted">v0.2 — MK7BoostGauge</span>
+  <span id="build-info" class="muted">UI v=7</span>
 </footer>
 
+<!-- Banner shown only if fetch /api/config fails — visible diagnostic -->
+<div id="fetch-error-banner" style="display:none; position:fixed; top:0; left:0; right:0;
+     background:#ff5e5e; color:#fff; padding:10px; text-align:center; z-index:9999;
+     font-weight:600;">
+  ⚠️ Impossible de charger la config depuis le Pi (vérifie réseau).
+  <br><span style="font-size:11px; font-weight:normal;" id="fetch-error-detail"></span>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/app.js?v=6"></script>
+<script src="/app.js?v=7"></script>
 </body>
 </html>
