@@ -1,0 +1,39 @@
+{
+  "_version": 2,
+  "map_min_mbar": 555,
+  "map_max_mbar": 2500,
+  "temp_min_c": 50,
+  "temp_max_c": 130,
+  "scale": 1.0,
+  "offset_c": 0,
+  "tx_rate_hz": 25,
+  "formula": "linear",
+  "skip_dead_zone": true,
+  "dead_zone_low_c": 80,
+  "dead_zone_high_c": 110,
+  "can": {
+    "cluster_iface": "can0",
+    "can1_iface": "can1",
+    "can1_mode": "diagnostic",
+    "can1_listen_only": false,
+    "bitrate": 500000,
+    "map_source": "auto",
+    "uds_did_map": 14784,
+    "uds_engine_req": 2016,
+    "uds_engine_resp": 2024,
+    "uds_query_rate_hz": 10
+  },
+  "wifi": {
+    "mode": "ap",
+    "ap_ssid": "MK7-BoostGauge",
+    "ap_password": "boost123",
+    "ap_channel": 6
+  },
+  "safety": {
+    "forbidden_can_ids": [
+      64,
+      1394,
+      1413
+    ]
+  }
+}
