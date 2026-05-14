@@ -462,19 +462,23 @@ async function refreshAllFromServer() {
   const banner = $("fetch-error-banner");
   const detail = $("fetch-error-detail");
   try {
-    const r = await fetch("/api/config", { cache: "no-store" });
+    // Cache-buster timestamp + cache:no-store header — DEFENSIVE against
+    // iPhone Safari which is known to cache GET responses aggressively
+    // even with no-cache headers (especially on first reload).
+    const r = await fetch("/api/config?_=" + Date.now(), {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" }
+    });
     if (!r.ok) throw new Error("HTTP " + r.status);
     const cfg = await r.json();
     fillConfig(cfg);
     if (banner) banner.style.display = "none";
   } catch (e) {
     console.error("Could not fetch /api/config:", e);
-    // Show visible error banner
     if (banner) {
       banner.style.display = "block";
       if (detail) detail.textContent = "Erreur: " + e.message;
     }
-    // Fall back to defaults so inputs are never empty
     fillConfig({});
   }
 }

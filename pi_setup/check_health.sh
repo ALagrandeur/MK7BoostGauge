@@ -129,6 +129,19 @@ info "5) Config file"
 CFG="/var/lib/boostgauge/config.json"
 if [[ -f "$CFG" ]]; then
   ok "  Config exists: $CFG"
+  cfg_owner=$(stat -c '%U:%G' "$CFG" 2>/dev/null)
+  if [[ "$cfg_owner" == "pi:pi" ]]; then
+    ok "  Config owned by pi:pi ($cfg_owner)"
+  else
+    fail "  Config owned by $cfg_owner (should be pi:pi — service can't save!)"
+    info "       Fix: sudo chown -R pi:pi /var/lib/boostgauge"
+  fi
+  if [[ -w "$CFG" ]] || sudo -u pi test -w "$CFG"; then
+    ok "  Config is writable by pi"
+  else
+    fail "  Config NOT writable by pi (Save will fail silently)"
+    info "       Fix: sudo chown pi:pi $CFG && sudo chmod 644 $CFG"
+  fi
   if python3 -c "import json; json.load(open('$CFG'))" 2>/dev/null; then
     ok "  Config is valid JSON"
     forbidden=$(python3 -c "

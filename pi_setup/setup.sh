@@ -105,11 +105,16 @@ echo "==> [4/8] Create writable config dir at $CONFIG_DIR"
 mkdir -p "$CONFIG_DIR"
 if [[ ! -f "$CONFIG_DIR/config.json" ]]; then
   cp "$PROJECT_DIR/config.example.json" "$CONFIG_DIR/config.json"
-  chown -R "$PI_USER:$PI_USER" "$CONFIG_DIR"
   echo "    Initial config copied."
 else
   echo "    Config already exists, preserved."
 fi
+# ALWAYS chown — fixes case where existing config might be root-owned
+# (would prevent the service writing on Save).
+chown -R "$PI_USER:$PI_USER" "$CONFIG_DIR"
+chmod 755 "$CONFIG_DIR"
+chmod 644 "$CONFIG_DIR/config.json"
+echo "    Ownership: $(ls -ld $CONFIG_DIR | awk '{print $3":"$4}')"
 
 echo "==> [5/8] Create Python venv + install requirements"
 sudo -u "$PI_USER" python3 -m venv "$VENV_DIR"

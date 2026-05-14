@@ -39,7 +39,13 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
 
     @app.route("/api/config", methods=["GET"])
     def api_get_config():
-        return jsonify(config.data)
+        # No-cache: Safari iPhone caches GET responses aggressively. Without
+        # this, after Save user does a refresh, gets the OLD cached config.
+        response = jsonify(config.data)
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
 
     @app.route("/api/config", methods=["POST"])
     def api_post_config():
@@ -73,7 +79,9 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
 
     @app.route("/api/state", methods=["GET"])
     def api_state():
-        return jsonify(_full_state())
+        response = jsonify(_full_state())
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return response
 
     # ---------------- Test Mode endpoint ----------------
     # Bypass BOOST gating to manually push a fixed temperature to the cluster.
