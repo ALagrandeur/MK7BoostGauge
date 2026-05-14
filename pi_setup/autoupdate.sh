@@ -126,12 +126,32 @@ fi
 
 # -------------------------------------------------------- 5. switch to AP (always)
 echo "Switching to AP mode (MK7-BoostGauge)..."
+
+# Verify AP connection profile exists BEFORE tearing down STA — otherwise
+# the Pi ends up with zero WiFi.
+if ! nmcli -t -f NAME connection show | grep -q "^MK7BoostGauge-AP$"; then
+  cat <<'WARN'
+========================================================================
+WARNING: 'MK7BoostGauge-AP' NetworkManager connection does NOT exist.
+The Pi will NOT broadcast the 'MK7-BoostGauge' WiFi until you run:
+
+  sudo bash /home/pi/MK7BoostGauge/pi_setup/ap_setup.sh
+  sudo reboot
+
+Keeping the current STA WiFi up so you can SSH and run the command above.
+========================================================================
+WARN
+  echo "==> autoupdate complete (AP not configured)."
+  exit 0
+fi
+
 nmcli connection down "$STA_CONN" 2>/dev/null || true
 sleep 1
 if nmcli connection up "MK7BoostGauge-AP" 2>/dev/null; then
   echo "AP up — Pi accessible at 192.168.4.1"
 else
-  echo "WARNING: AP failed to come up. Check ap_setup.sh output."
+  echo "ERROR: AP failed to start. Re-enabling STA so Pi remains reachable."
+  nmcli connection up "$STA_CONN" 2>/dev/null || true
 fi
 
 echo "==> autoupdate complete."

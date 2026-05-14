@@ -176,18 +176,36 @@ EOF
 systemctl daemon-reload
 systemctl enable boostgauge.service
 
-echo "==> [8/9] (Optional) WiFi AP setup — uncomment block in this script if you want it"
-# bash "$PROJECT_DIR/pi_setup/ap_setup.sh"
+echo "==> [8/9] WiFi AP setup check"
+if nmcli -t -f NAME connection show 2>/dev/null | grep -q "^MK7BoostGauge-AP$"; then
+  echo "    AP connection 'MK7BoostGauge-AP' already exists. Skipping."
+else
+  cat <<EOF
+
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    AP not yet configured. To create the 'MK7-BoostGauge' WiFi (so your
+    phone can reach the Pi in the car), you MUST run NEXT:
+
+        sudo bash $PROJECT_DIR/pi_setup/ap_setup.sh
+        sudo reboot
+
+    WARNING: ap_setup.sh will switch the Pi to AP mode immediately.
+    If you are currently SSH-ing over your home WiFi, your session WILL
+    drop. Reconnect to the 'MK7-BoostGauge' network from your phone
+    (password 'boost123') after reboot.
+    !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+EOF
+fi
 
 echo "==> [9/9] Done!"
 echo ""
 echo "    NEXT STEPS:"
-echo "    1. REBOOT the Pi: sudo reboot"
-echo "    2. After reboot, verify CAN: ip -br link show | grep can"
-echo "    3. Main service: systemctl status boostgauge"
-echo "    4. Auto-update logs: cat /var/log/boostgauge-autoupdate.log"
-echo "    5. To DISABLE auto-update temporarily:"
+echo "    1. (If shown above) sudo bash pi_setup/ap_setup.sh"
+echo "    2. REBOOT the Pi: sudo reboot"
+echo "    3. After reboot, verify CAN: ip -br link show | grep can"
+echo "    4. Main service: systemctl status boostgauge"
+echo "    5. Auto-update log: cat /var/log/boostgauge-autoupdate.log"
+echo "    6. Disable autoupdate temporarily:"
 echo "         sudo touch /var/lib/boostgauge/disable_autoupdate"
-echo "       To RE-ENABLE:"
-echo "         sudo rm /var/lib/boostgauge/disable_autoupdate"
 echo ""
