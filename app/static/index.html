@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=8">
+<link rel="stylesheet" href="/style.css?v=9">
 </head>
 <body>
 
@@ -29,41 +29,18 @@
       <label>MAP max (mbar) <input type="number" id="cfg-map_max_mbar" min="0" max="4000" step="10" value="2500"></label>
     </div>
     <div class="row">
-      <label>Temp min (°C) <input type="number" id="cfg-temp_min_c" min="0" max="150" step="1" value="50"></label>
-      <label>Temp max (°C) <input type="number" id="cfg-temp_max_c" min="0" max="150" step="1" value="130"></label>
-    </div>
-    <div class="row">
       <label>Scale <input type="number" id="cfg-scale" min="0.1" max="3.0" step="0.05" value="1.0"></label>
       <label>Offset (°C) <input type="number" id="cfg-offset_c" min="-50" max="50" step="1" value="0"></label>
     </div>
     <div class="row">
-      <label>Formule
-        <select id="cfg-formula">
-          <option value="linear" selected>Linéaire (par défaut)</option>
-          <option value="exp">Exponentielle (drame)</option>
-          <option value="sqrt">Racine carrée (sensibilité basse)</option>
-        </select>
-      </label>
       <label>Fréquence TX (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1" value="25"></label>
     </div>
 
-    <div class="dead-zone-section">
-      <label class="switch-row dead-zone-switch">
-        <input type="checkbox" id="cfg-skip_dead_zone" checked>
-        <span class="switch-text">
-          <b>Sauter la zone morte du cluster</b>
-          <br><span class="small muted">
-            Le cluster MQB fige l'aiguille pour toute température entre les bornes
-            ci-dessous (~80-110°C). Quand activé, la mapping MAP→°C saute cette
-            zone : aiguille bouge en continu sur toute la plage MAP.
-          </span>
-        </span>
-      </label>
-      <div class="row">
-        <label>Zone morte BAS (°C) <input type="number" id="cfg-dead_zone_low_c" min="50" max="100" step="1" value="80"></label>
-        <label>Zone morte HAUT (°C) <input type="number" id="cfg-dead_zone_high_c" min="100" max="130" step="1" value="110"></label>
-      </div>
-    </div>
+    <p class="muted small" style="margin-top:14px; padding:8px; background:#131820; border-radius:6px;">
+      🔒 <b>Réglages fixés en interne</b> : Temp min = 50°C, Temp max = 130°C,
+      formule = linéaire avec saut zone morte 80-110°C.
+      Conformément à la calibration cluster MK7 (cohérent avec ton autre projet GitHub).
+    </p>
     <div class="actions">
       <button id="btn-save">💾 Sauvegarder</button>
       <button id="btn-reset" class="secondary">↺ Reset défauts</button>
@@ -323,7 +300,7 @@
 
 <footer>
   <span id="conn-status" class="muted">Connexion…</span>
-  <span id="build-info" class="muted">UI v=8</span>
+  <span id="build-info" class="muted">UI v=9</span>
 </footer>
 
 <!-- Banner shown only if fetch /api/config fails — visible diagnostic -->
@@ -335,6 +312,6 @@
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
-<script src="/app.js?v=8"></script>
+<script src="/app.js?v=9"></script>
 </body>
 </html>

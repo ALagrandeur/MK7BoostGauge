@@ -113,16 +113,32 @@ class Config:
             self._normalize_in_place(self.data)
             self.data = _migrate(self.data)
 
-    def save(self) -> None:
+    def save(self) -> tuple[bool, str]:
+        """Persist current config to disk. Returns (success, error_message)."""
         with self._lock:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps(self.data, indent=2))
-            log.info("Saved config to %s", self.path)
+            try:
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+                self.path.write_text(json.dumps(self.data, indent=2))
+                log.info("Saved config to %s", self.path)
+                return True, ""
+            except (OSError, PermissionError) as e:
+                msg = f"Cannot write {self.path}: {e}"
+                log.error("FAILED to save config: %s", msg)
+                return False, msg
+            except Exception as e:
+                msg = f"Unexpected save error: {e}"
+                log.exception("FAILED to save config: %s", msg)
+                return False, msg
 
-    def update(self, patch: dict[str, Any]) -> None:
+    def update(self, patch: dict[str, Any]) -> tuple[bool, str]:
+        """Merge patch into in-memory config + persist to disk.
+
+        Returns (success, error_message). If save fails, in-memory state is
+        still updated, but caller should warn user.
+        """
         with self._lock:
             _deep_merge(self.data, patch)
-        self.save()
+        return self.save()
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.data.get(key, default)

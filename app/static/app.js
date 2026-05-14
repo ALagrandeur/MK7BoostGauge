@@ -3,19 +3,14 @@
 const $ = (id) => document.getElementById(id);
 const socket = io();
 
-const CFG_FIELDS = ["map_min_mbar", "map_max_mbar", "temp_min_c", "temp_max_c",
-                    "scale", "offset_c", "tx_rate_hz", "formula",
-                    "skip_dead_zone", "dead_zone_low_c", "dead_zone_high_c"];
+// Only fields actually editable in the UI. Temp bounds, formula, dead zone
+// bounds are hardcoded internally (consistent with reference project).
+const CFG_FIELDS = ["map_min_mbar", "map_max_mbar", "scale", "offset_c", "tx_rate_hz"];
 
-// Hardcoded fallback values — used if backend returns sparse config (e.g.
-// older /var/lib/boostgauge/config.json that doesn't have all new fields).
-// Prevents inputs from showing as empty after page restore / bfcache.
+// Defaults if backend returns sparse config — keeps inputs filled.
 const CFG_DEFAULTS = {
   map_min_mbar: 300, map_max_mbar: 2500,
-  temp_min_c: 50,   temp_max_c: 130,
   scale: 1.0, offset_c: 0, tx_rate_hz: 25,
-  formula: "linear",
-  skip_dead_zone: true, dead_zone_low_c: 80, dead_zone_high_c: 110,
 };
 
 let currentMode = "pcm";
@@ -161,9 +156,7 @@ $("btn-reset").addEventListener("click", async () => {
   if (!confirm("Réinitialiser aux valeurs par défaut ?")) return;
   const defaults = {
     map_min_mbar: 300, map_max_mbar: 2500,
-    temp_min_c: 50, temp_max_c: 130,
-    scale: 1.0, offset_c: 0, tx_rate_hz: 25, formula: "linear",
-    skip_dead_zone: true, dead_zone_low_c: 80, dead_zone_high_c: 110
+    scale: 1.0, offset_c: 0, tx_rate_hz: 25,
   };
   await fetch("/api/config", {
     method: "POST", headers: {"Content-Type": "application/json"},

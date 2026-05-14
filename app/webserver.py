@@ -65,12 +65,20 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         except Exception:
             return jsonify({"ok": False, "error": "invalid safety.forbidden_can_ids format"}), 400
 
-        config.update(patch)
-        log.info("Config updated via API: %s", list(patch.keys()))
+        save_ok, save_err = config.update(patch)
+        log.info("Config updated via API: %s (saved=%s)", list(patch.keys()), save_ok)
 
         # Hot-apply CAN1 listen-only flag to the live CanManager
         if "can" in patch and "can1_listen_only" in patch["can"]:
             controller.can.set_can1_listen_only(bool(patch["can"]["can1_listen_only"]))
+
+        if not save_ok:
+            return jsonify({
+                "ok": False,
+                "error": "In-memory updated, but DISK SAVE FAILED: " + save_err,
+                "hint": "Check file permissions: ls -la /var/lib/boostgauge/config.json (should be pi:pi)",
+                "config": config.data,
+            }), 500
 
         # Broadcast updated config to all connected clients (multi-tab sync)
         socketio.emit("config", config.data)
@@ -82,6 +90,31 @@ def create_app(config: "Config", controller: "BoostController") -> tuple[Flask, 
         response = jsonify(_full_state())
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         return response
+
+    @app.route("/api/config/disk", methods=["GET"])
+    def api_config_disk():
+        """DIAGNOSTIC: read config straight from disk and compare to in-memory.
+
+        Use this to verify saves are actually persisting:
+          curl http://192.168.4.1/api/config/disk
+
+        Returns whether the on-disk file matches the in-memory state.
+        If not, the save isn't writing successfully.
+        """
+        import json as _json
+        if not config.path.exists():
+            return jsonify({"ok": False, "error": f"file not found at {config.path}"}), 404
+        try:
+            disk_data = _json.loads(config.path.read_text())
+            return jsonify({
+                "ok": True,
+                "path": str(config.path),
+                "matches_memory": disk_data == config.data,
+                "disk_data": disk_data,
+                "memory_data": config.data,
+            })
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e)}), 500
 
     # ---------------- Test Mode endpoint ----------------
     # Bypass BOOST gating to manually push a fixed temperature to the cluster.
