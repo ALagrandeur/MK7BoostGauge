@@ -49,11 +49,36 @@ if [[ "$NET_STACK" == "networkmanager" ]]; then
         ipv4.method shared \
         ipv4.addresses 192.168.4.1/24 \
         wifi-sec.key-mgmt wpa-psk \
-        wifi-sec.psk "$PASS"
+        wifi-sec.psk "$PASS" \
+        connection.autoconnect-priority 100
+
+  # ---- CRITICAL: prevent NetworkManager ping-pong between AP and STA ----
+  # Without explicit priorities, NM alternates wlan0 between any saved STA
+  # WiFi (autoconnect=yes by default) and our AP — Pi IP flips between
+  # 192.168.4.1 and 127.0.1.1 every 10 sec, UI unreachable.
+  # Solution: AP priority=100 (above), all OTHER WiFi profiles priority=10.
+  echo "==> Setting STA WiFi connections to lower autoconnect priority"
+  STA_LIST=$(nmcli -t -f NAME,TYPE connection show \
+              | awk -F: '$2=="802-11-wireless" && $1!="MK7BoostGauge-AP"{print $1}')
+  if [[ -n "$STA_LIST" ]]; then
+    while IFS= read -r conn; do
+      [[ -z "$conn" ]] && continue
+      echo "    '$conn' -> autoconnect-priority=10 (AP wins)"
+      nmcli connection modify "$conn" connection.autoconnect-priority 10
+      # ALSO bring it down to release wlan0 immediately
+      nmcli connection down "$conn" 2>/dev/null || true
+    done <<< "$STA_LIST"
+  else
+    echo "    (no STA WiFi connections found — only the AP will exist)"
+  fi
+
   nmcli connection up "MK7BoostGauge-AP"
   echo ""
   echo "==> Done. SSID '$SSID' password '$PASS' active."
   echo "    Browse: http://192.168.4.1"
+  echo "    Note: any saved STA WiFi remains for autoupdate use, but AP wins"
+  echo "          autoconnect priority. autoupdate.sh manually brings up STA"
+  echo "          briefly when needed (boot-time check)."
   exit 0
 fi
 
