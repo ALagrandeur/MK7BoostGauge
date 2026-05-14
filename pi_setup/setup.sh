@@ -123,15 +123,17 @@ echo "==> [6/9] Install boot-time auto-update service"
 cat > /etc/systemd/system/boostgauge-autoupdate.service <<EOF
 [Unit]
 Description=MK7BoostGauge — boot-time GitHub auto-updater
-After=NetworkManager.service
-Wants=NetworkManager.service
+# Wait for NetworkManager to have done its initial connection attempt
+# (timeout 30s). If no STA WiFi available, the service still runs
+# and skips the update gracefully, then ensures AP is up.
+After=NetworkManager-wait-online.service network.target
+Wants=NetworkManager-wait-online.service
 Before=boostgauge.service
-DefaultDependencies=no
 
 [Service]
 Type=oneshot
 RemainAfterExit=no
-TimeoutStartSec=180
+TimeoutStartSec=120
 ExecStart=/bin/bash $PROJECT_DIR/pi_setup/autoupdate.sh
 
 [Install]
