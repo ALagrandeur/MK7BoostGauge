@@ -143,10 +143,44 @@ Si tout est vert → **Pi 100% opérationnel**. Tu peux le débrancher l'écran 
 1. Allume le Pi (alim 12V)
 2. Sur PC : double-clic "MK7BoostGauge" sur bureau
    → Navigateur s'ouvre auto sur http://localhost:8080
-3. Modifie les sliders (MAP min/max, scale, offset, Hz)
+3. Modifie les sliders (MAP min/max, scale, offset, Hz, source MAP, etc.)
 4. Clic "Envoyer au Pi" → cluster réagit immédiat (hot apply)
-5. Mode test : actives + clic preset → envoie instantanément
 ```
+
+## 🔄 Mise à jour du CODE du Pi (depuis GitHub)
+
+Quand je push de nouvelles features sur GitHub, pour les récupérer sur le Pi :
+
+### Méthode 1 — Script PowerShell (le plus rapide)
+
+```powershell
+cd C:\Users\AntoineLagrandeur\MK7BoostGauge
+.\update_pi.ps1
+```
+
+Le script :
+1. Ping le Pi
+2. SSH + `git pull` sur le Pi (Pi pull depuis GitHub via son WiFi maison)
+3. SSH + `systemctl restart boostgauge-daemon`
+
+Pour éviter de taper le password à chaque fois, fais 1 fois :
+```powershell
+.\setup_ssh_key.ps1
+# Tape password Pi une fois, après c'est automatique
+```
+
+### Méthode 2 — Manuel SSH
+
+```bash
+ssh pi@boostgauge.local
+cd MK7BoostGauge
+git pull
+sudo systemctl restart boostgauge-daemon
+```
+
+### Méthode 3 — Mise à jour de la config seulement (UI)
+
+Pour juste changer des valeurs (MAP min/max, scale, etc.) : tu ne touches pas au code. Tu modifies dans l'UI PC et tu cliques **Envoyer au Pi**.
 
 ## ✨ Features de l'UI
 
