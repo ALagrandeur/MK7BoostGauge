@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=2">
+<link rel="stylesheet" href="/style.css?v=3">
 </head>
 <body>
 
@@ -37,6 +37,48 @@
     <p class="muted small fixed-note">
       🔒 <b>Fixé en interne</b> : Temp min 50°C, Temp max 130°C,
       saut zone morte 80-110°C.
+      <br>
+      ✅ Avec <code>scale=1.0</code> + <code>offset=0</code> les valeurs par défaut donnent
+      l'<b>amplitude complète</b> de l'aiguille du cluster (50→130°C). Ajuste seulement
+      pour calibration fine.
+    </p>
+
+    <!-- Live mapping preview: shows what cluster will display for sample MAPs -->
+    <div class="mapping-preview">
+      <h3 class="mapping-subtitle">📐 Aperçu mapping (calculé live depuis tes valeurs)</h3>
+      <table class="mapping-table">
+        <thead>
+          <tr><th>MAP (mbar)</th><th>→ Temp envoyée</th><th>→ Byte CAN</th><th>Position aiguille</th></tr>
+        </thead>
+        <tbody id="mapping-tbody">
+          <!-- Filled dynamically by JS -->
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Cluster CAN addresses (CAN0)
+       =================================================================== -->
+  <section class="card card-cluster-addr">
+    <h2>🔧 Adresses CAN du cluster (CAN0)</h2>
+    <p class="muted small">Adresses utilisées sur le bus Cluster (CAN0).
+       Par défaut OK pour cluster MK7 5G1 920 740B. Modifie seulement si tu sais
+       ce que tu fais (cluster différent, etc.).</p>
+
+    <div class="row">
+      <label>Motor_09 (TX coolant + sniff temp affichée)
+        <input type="text" id="cfg-cluster_motor09_id_hex" value="0x647" placeholder="0x647">
+      </label>
+      <label>WBA_03 (RX position levier transmission)
+        <input type="text" id="cfg-cluster_wba03_id_hex" value="0x394" placeholder="0x394">
+      </label>
+    </div>
+    <p class="muted small">
+      💡 <b>Motor_09 (0x647)</b> = le Pi <b>envoie</b> ici la temp override
+      AND <b>écoute</b> byte 0 pour lire la temp affichée par le cluster.<br>
+      💡 <b>WBA_03 (0x394)</b> = le Pi <b>écoute</b> byte 1 high nibble pour
+      détecter la position du levier (P/R/N/D/S/M).
     </p>
   </section>
 
@@ -175,6 +217,6 @@
   <span class="muted">v3.1 — MK7BoostGauge</span>
 </footer>
 
-<script src="/app.js?v=2"></script>
+<script src="/app.js?v=3"></script>
 </body>
 </html>

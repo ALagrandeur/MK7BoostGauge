@@ -35,6 +35,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "pcm_map_scale": 1.0,             # Raw byte * scale
     "pcm_map_offset": 0.0,            # + offset = mbar
 
+    # Cluster CAN addresses (CAN0) — modifiable for flexibility
+    "cluster_motor09_id_hex": "0x647",   # Motor_09: cluster temperature TX target
+                                          # (we also sniff it byte 0 to read real coolant)
+    "cluster_wba03_id_hex": "0x394",     # WBA_03: gear lever broadcast (we listen)
+
     # Pi connection
     "pi_host": "boostgauge.local",
     "pi_port": 8765,
@@ -92,6 +97,7 @@ class PcConfig:
             "map_source",
             "obd2_req_id_hex", "obd2_resp_id_hex", "obd2_did_map_hex", "obd2_query_rate_hz",
             "pcm_map_can_id_hex", "pcm_map_byte_offset", "pcm_map_scale", "pcm_map_offset",
+            "cluster_motor09_id_hex", "cluster_wba03_id_hex",
         }
         with self._lock:
             return {k: v for k, v in self.data.items() if k in pi_keys}

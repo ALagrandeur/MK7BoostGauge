@@ -31,11 +31,30 @@ main { padding: 16px; max-width: 720px; margin: 0 auto; }
         padding: 16px; margin-bottom: 16px; }
 .card h2 { margin: 0 0 10px; font-size: 16px; color: var(--muted); font-weight: 500; }
 
-.card-cluster    { border-left: 4px solid var(--temp); }
-.card-map-source { border-left: 4px solid #b288ff; }
-.card-status     { border-left: 4px solid var(--accent); }
-.card-action     { border-left: 4px solid var(--boost); text-align: center; }
-.card-pi         { border-left: 4px solid var(--muted); }
+.card-cluster      { border-left: 4px solid var(--temp); }
+.card-cluster-addr { border-left: 4px solid #4ddb8a; background: #131820; }
+.card-map-source   { border-left: 4px solid #b288ff; }
+.card-status       { border-left: 4px solid var(--accent); }
+.card-action       { border-left: 4px solid var(--boost); text-align: center; }
+.card-pi           { border-left: 4px solid var(--muted); }
+
+/* Mapping preview table */
+.mapping-preview { margin-top: 14px; background: #131820; padding: 12px;
+                   border-radius: 8px; border: 1px solid var(--border); }
+.mapping-subtitle { font-size: 13px; color: var(--muted); margin: 0 0 10px;
+                     font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+.mapping-table { width: 100%; border-collapse: collapse; font-size: 13px;
+                  font-family: ui-monospace, monospace; }
+.mapping-table th, .mapping-table td { text-align: left; padding: 6px 8px;
+                                        border-bottom: 1px solid var(--border); }
+.mapping-table th { color: var(--muted); font-weight: 500; font-size: 11px;
+                    text-transform: uppercase; }
+.mapping-table td { font-variant-numeric: tabular-nums; }
+.needle-bar { display: inline-block; height: 8px; background: var(--border);
+              border-radius: 4px; width: 80px; vertical-align: middle; position: relative; }
+.needle-fill { position: absolute; left: 0; top: 0; bottom: 0;
+               background: linear-gradient(90deg, var(--temp), var(--boost));
+               border-radius: 4px; }
 
 /* MAP source toggle */
 .toggle-group { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }

@@ -41,7 +41,6 @@ log = logging.getLogger("MK7Daemon")
 # ---------------------------------------------------------------------------
 
 CONFIG_PATH = Path("/var/lib/boostgauge/config.json")
-WBA_03_ID = 0x394   # Gear lever (on cluster CAN forwarded by gateway)
 
 DEFAULT_CONFIG = {
     "map_min_mbar": 300,
@@ -49,7 +48,7 @@ DEFAULT_CONFIG = {
     "scale": 1.0,
     "offset_c": 0,
     "tx_rate_hz": 25,
-    "map_source": "obd2_diagnostic",   # or "pcm_broadcast"
+    "map_source": "obd2_diagnostic",
     "obd2_req_id_hex": "0x7E0",
     "obd2_resp_id_hex": "0x7E8",
     "obd2_did_map_hex": "0x39C0",
@@ -58,6 +57,9 @@ DEFAULT_CONFIG = {
     "pcm_map_byte_offset": 0,
     "pcm_map_scale": 1.0,
     "pcm_map_offset": 0.0,
+    # Cluster CAN0 addresses (modifiable for flexibility / different cluster variants)
+    "cluster_motor09_id_hex": "0x647",   # Motor_09: where we TX coolant + sniff real
+    "cluster_wba03_id_hex": "0x394",     # WBA_03: gear lever (RX only)
 }
 
 
@@ -165,8 +167,12 @@ class BoostController:
 
     # ---------------------------------------------------- CAN0 (cluster) RX
     def _on_cluster_frame(self, can_id: int, data: bytes, ts: float) -> None:
-        # Lever from WBA_03
-        if can_id == WBA_03_ID:
+        cfg = self.state.config
+        wba03_id = _hex_to_int(cfg.get("cluster_wba03_id_hex", "0x394"))
+        motor09_id = _hex_to_int(cfg.get("cluster_motor09_id_hex", "0x647"))
+
+        # Lever from WBA_03 (or whatever ID is configured)
+        if can_id == wba03_id:
             lever = decode_lever_with_gear(data)
             if lever:
                 with self.state.lock:
@@ -176,7 +182,7 @@ class BoostController:
             return
 
         # Real coolant: sniff Motor_09 byte 0 (what cluster currently displays)
-        if can_id == MOTOR_09_ID and len(data) >= 1:
+        if can_id == motor09_id and len(data) >= 1:
             with self.state.lock:
                 self.state.coolant_real_c = motor09_byte_to_temp_c(data[0])
                 self.state.last_coolant_ts = ts
@@ -271,9 +277,10 @@ class BoostController:
                     offset_c=cfg.get("offset_c", 0),
                 )
                 payload = build_motor_09(byte0)
+                motor09_id = _hex_to_int(cfg.get("cluster_motor09_id_hex", "0x647"))
                 with self.state.lock:
                     self.state.last_motor09_byte = byte0
-                self.can.send("cluster", MOTOR_09_ID, payload)
+                self.can.send("cluster", motor09_id, payload)
             # TEMP / WAITING: silent
 
             time.sleep(period)
