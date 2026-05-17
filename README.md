@@ -98,6 +98,11 @@ ssh pi@boostgauge.local
 # Si ça plante avec "host not found", trouve l'IP via ton routeur
 # puis: ssh pi@192.168.X.X
 
+# Pi OS Lite n'a PAS git par défaut — install d'abord :
+sudo apt update
+sudo apt -y install git
+
+# Puis cloner + lancer le setup
 git clone https://github.com/ALagrandeur/MK7BoostGauge.git
 cd MK7BoostGauge/pi
 sudo bash setup_pi.sh
