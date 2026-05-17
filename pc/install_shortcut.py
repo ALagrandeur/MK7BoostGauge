@@ -17,20 +17,52 @@ from pathlib import Path
 
 
 def get_desktop_path() -> Path:
-    """Return Windows Desktop path (works with OneDrive redirects too)."""
-    # Try USERPROFILE\Desktop first (standard)
+    """Return Windows REAL Desktop path (handles OneDrive redirect properly).
+
+    Uses Windows Shell API via pywin32 if available — this returns the
+    actual Desktop the user sees, not the orphaned C:\\Users\\X\\Desktop
+    folder that Windows leaves behind when OneDrive Desktop redirect is on.
+
+    Falls back to manual detection if pywin32 not available.
+    """
+    # PREFERRED: ask Windows directly for the Desktop CSIDL/known folder.
+    try:
+        from win32com.shell import shell, shellcon
+        path = shell.SHGetFolderPath(0, shellcon.CSIDL_DESKTOPDIRECTORY, None, 0)
+        if path and Path(path).exists():
+            return Path(path)
+    except ImportError:
+        pass
+    except Exception:
+        pass
+
+    # FALLBACK 1: read from Windows registry (User Shell Folders -> Desktop)
+    try:
+        import winreg
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as k:
+            value, _ = winreg.QueryValueEx(k, "Desktop")
+            expanded = os.path.expandvars(value)
+            if Path(expanded).exists():
+                return Path(expanded)
+    except Exception:
+        pass
+
+    # FALLBACK 2: scan candidate locations (OneDrive variations + standard)
     profile = os.environ.get("USERPROFILE", "")
     if profile:
-        desktop = Path(profile) / "Desktop"
-        if desktop.exists():
-            return desktop
-        # OneDrive Desktop redirect (common on Windows 11)
-        onedrive = Path(profile) / "OneDrive" / "Desktop"
-        if onedrive.exists():
-            return onedrive
-        onedrive_alt = Path(profile) / "OneDrive - ÉNERSERV INC" / "Bureau"
-        if onedrive_alt.exists():
-            return onedrive_alt
+        # Try OneDrive variants FIRST (they're often the active Desktop)
+        for d in Path(profile).glob("OneDrive*"):
+            for sub in ("Desktop", "Bureau"):
+                candidate = d / sub
+                if candidate.exists():
+                    return candidate
+        # Plain standard Desktop / Bureau last
+        for sub in ("Desktop", "Bureau"):
+            candidate = Path(profile) / sub
+            if candidate.exists():
+                return candidate
+
     raise RuntimeError("Could not find Desktop folder")
 
 

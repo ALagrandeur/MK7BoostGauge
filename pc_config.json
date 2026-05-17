@@ -1,0 +1,18 @@
+{
+  "map_min_mbar": 300,
+  "map_max_mbar": 2500,
+  "scale": 1,
+  "offset_c": 0,
+  "tx_rate_hz": 25,
+  "map_source": "obd2_diagnostic",
+  "obd2_req_id_hex": "0x7E0",
+  "obd2_resp_id_hex": "0x7E8",
+  "obd2_did_map_hex": "0x39C0",
+  "obd2_query_rate_hz": 5,
+  "pcm_map_can_id_hex": "0x0",
+  "pcm_map_byte_offset": 0,
+  "pcm_map_scale": 1,
+  "pcm_map_offset": 0,
+  "pi_host": "boostgauge.local",
+  "pi_port": 8765
+}
