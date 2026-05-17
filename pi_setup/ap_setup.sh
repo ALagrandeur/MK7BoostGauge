@@ -72,13 +72,30 @@ if [[ "$NET_STACK" == "networkmanager" ]]; then
     echo "    (no STA WiFi connections found — only the AP will exist)"
   fi
 
-  nmcli connection up "MK7BoostGauge-AP"
+  # Wait for STA(s) to fully release wlan0 before bringing up AP
+  sleep 2
+  echo "==> Bringing up AP..."
+  if nmcli connection up "MK7BoostGauge-AP"; then
+    sleep 3
+    # Verify it actually came up
+    if nmcli -t -f NAME,DEVICE connection show --active | grep -q "^MK7BoostGauge-AP:wlan0"; then
+      ap_ip=$(ip -4 addr show wlan0 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+      echo "    SUCCESS: AP active on wlan0 at IP $ap_ip"
+    else
+      echo "    WARNING: 'nmcli up' returned OK but AP not visible in --active list."
+      echo "    Will retry once in 5 sec..."
+      sleep 5
+      nmcli connection up "MK7BoostGauge-AP" 2>&1 || true
+    fi
+  else
+    echo "    ERROR: Failed to bring up AP. Check 'nmcli connection show MK7BoostGauge-AP'"
+  fi
+
   echo ""
-  echo "==> Done. SSID '$SSID' password '$PASS' active."
-  echo "    Browse: http://192.168.4.1"
-  echo "    Note: any saved STA WiFi remains for autoupdate use, but AP wins"
-  echo "          autoconnect priority. autoupdate.sh manually brings up STA"
-  echo "          briefly when needed (boot-time check)."
+  echo "==> Done. SSID '$SSID' password '$PASS'"
+  echo "    URL: http://192.168.4.1"
+  echo ""
+  echo "    Verify on phone: scan WiFi, look for '$SSID'"
   exit 0
 fi
 

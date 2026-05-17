@@ -46,20 +46,37 @@ BANNER
 read -p "Press ENTER to continue, or Ctrl+C to abort..." _
 
 echo ""
-echo "==> [1/3] Enabling USB Ethernet gadget"
+echo "==> [1/4] Ensuring WiFi AP is configured (idempotent)"
+# CRITICAL: ap_setup.sh must run so MK7BoostGauge-AP profile exists with
+# autoconnect-priority=100. Without this, after reboot the Pi has no AP
+# and the phone cannot connect.
+bash "$SCRIPT_DIR/ap_setup.sh"
+
+echo ""
+echo "==> [2/4] Enabling USB Ethernet gadget"
 bash "$SCRIPT_DIR/enable_usb_gadget.sh"
 
 echo ""
-echo "==> [2/3] Disabling boot-time WiFi auto-update"
+echo "==> [3/4] Disabling boot-time WiFi auto-update"
 bash "$SCRIPT_DIR/disable_autoupdate.sh"
 
 echo ""
-echo "==> [3/3] Rebooting in 10 sec to apply"
+echo "==> [4/4] Final verification"
+echo ""
+echo "    Current WiFi connections (autoconnect priority):"
+nmcli -t -f NAME,TYPE,AUTOCONNECT-PRIORITY connection show 2>/dev/null \
+  | awk -F: '$2=="802-11-wireless"{printf "      %s (priority=%s)\n", $1, $3}'
+echo ""
+echo "    AP profile installed: $(nmcli -t -f NAME connection show | grep -c '^MK7BoostGauge-AP$')"
+echo "    Autoupdate disabled : $(test -f /var/lib/boostgauge/disable_autoupdate && echo yes || echo no)"
+echo "    USB gadget config   : $(grep -c '^dtoverlay=dwc2$' /boot/firmware/config.txt 2>/dev/null || echo 0)"
+echo ""
+echo "==> Rebooting in 15 sec to apply"
 echo ""
 echo "After reboot:"
 echo "  - On phone: connect to MK7-BoostGauge WiFi (password boost123)"
 echo "  - On PC: plug USB cable to Pi DATA port, then:"
 echo "      ssh pi@boostgauge.local"
 echo ""
-sleep 10
+sleep 15
 reboot
