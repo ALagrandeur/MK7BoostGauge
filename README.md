@@ -7,6 +7,10 @@ coolant temperature needle as a boost indicator.
 > — bench-only PC-tethered controller used to reverse-engineer cluster behaviour.
 > This project (`MK7BoostGauge`) is the **autonomous in-car** evolution.
 
+> 📌 **Daily workflow**: see [`USB_WORKFLOW.md`](USB_WORKFLOW.md) —
+> Pi accessed via USB cable from PC, WiFi 100% dedicated to phone AP.
+> One-command update from PC: `.\update_pi.ps1`
+
 ---
 
 ## Concept
