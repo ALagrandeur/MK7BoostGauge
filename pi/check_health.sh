@@ -88,7 +88,14 @@ echo ""
 # -------------------------------------------------------- 4. HTTP daemon
 info "4) HTTP daemon"
 PING=$(curl -s -m 3 http://localhost:8765/ping 2>/dev/null)
-if [[ -n "$PING" ]] && echo "$PING" | grep -q '"ok": true'; then
+# Use Python to parse (more robust than grep against various whitespace formats)
+PING_OK=$(echo "$PING" | python3 -c "import json,sys
+try:
+    d = json.load(sys.stdin)
+    print('true' if d.get('ok') else 'false')
+except Exception:
+    print('false')" 2>/dev/null)
+if [[ "$PING_OK" == "true" ]]; then
   ok "  GET /ping -> $(echo "$PING" | head -c 80)"
 else
   fail "  GET /ping FAILED — daemon not listening?"
