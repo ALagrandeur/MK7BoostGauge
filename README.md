@@ -73,31 +73,64 @@ python pc/install_shortcut.py
 
 ### Phase B — Pi (10 min, 1 fois)
 
-1. Flash SD avec **Raspberry Pi Imager** :
-   - OS : **Raspberry Pi OS Lite (64-bit)**
-   - Hostname : `boostgauge`
-   - User : `pi`, password : `boost123`
-   - WiFi : ton SSID maison + password
-   - SSH activé
+**Pré-requis hardware** : HAT WaveShare 2-CH CAN MCP2515 monté sur les pins GPIO du Pi Zero 2W. Termination jumpers : **enlevés** si Pi sera dans la voiture (cluster fait déjà la terminaison), **gardés** si Pi sur bench isolé.
 
-2. Boot Pi, SSH depuis PC :
-   ```bash
-   ssh pi@boostgauge.local
-   git clone https://github.com/ALagrandeur/MK7BoostGauge.git
-   cd MK7BoostGauge/pi
-   sudo bash setup_pi.sh
-   sudo reboot
-   ```
+#### Étape B-1 — Flash SD (déjà fait par l'utilisateur)
 
-3. Vérifier après reboot :
-   ```bash
-   ssh pi@boostgauge.local
-   systemctl status boostgauge-daemon
-   ip -br link show | grep can
-   curl http://localhost:8765/ping
-   ```
+Raspberry Pi Imager :
+- OS : **Raspberry Pi OS Lite (64-bit)**
+- Settings ⚙️ :
+  - Hostname : `boostgauge`
+  - User : `pi` / Password : `boost123`
+  - WiFi : ton SSID maison + password (case sensitive!)
+  - **Wireless LAN country : CA** (sinon WiFi ne s'active pas)
+  - SSH activé (password auth)
+  - Locale : ton fuseau
 
-→ Pi opérationnel. Plus jamais besoin de SSH.
+#### Étape B-2 — Insérer SD, brancher alim, attendre 90 sec
+
+LED verte du Pi : clignote au boot, devient stable quand prête.
+
+#### Étape B-3 — SSH depuis PC + install (1 fois)
+
+```bash
+ssh pi@boostgauge.local
+# Si ça plante avec "host not found", trouve l'IP via ton routeur
+# puis: ssh pi@192.168.X.X
+
+git clone https://github.com/ALagrandeur/MK7BoostGauge.git
+cd MK7BoostGauge/pi
+sudo bash setup_pi.sh
+```
+
+Le script installe :
+- Dépendances apt (python venv, can-utils, git)
+- Overlays MCP2515 dans `/boot/firmware/config.txt` (**SPI à 1MHz** = fix kernel oops Pi Zero 2W)
+- Service systemd `boostgauge-can-up.service` (auto can0/can1 à 500 kbps)
+- Venv Python + Flask
+- Service systemd `boostgauge-daemon.service` (démarre à chaque boot)
+
+Quand tu vois `==> Setup complete!`, faire :
+```bash
+sudo reboot
+```
+
+#### Étape B-4 — Après reboot : vérification
+
+```bash
+ssh pi@boostgauge.local
+bash ~/MK7BoostGauge/pi/check_health.sh
+```
+
+Script color-coded qui vérifie :
+1. ✅ Module MCP2515 chargé sans kernel oops
+2. ✅ can0/can1 UP à 500 kbps
+3. ✅ Services systemd enabled + daemon active
+4. ✅ Endpoints HTTP répondent (/ping, /status)
+5. ✅ Config file owned by pi:pi
+6. ℹ️ Sniff CAN0 3 sec (compte les frames si cluster branché)
+
+Si tout est vert → **Pi 100% opérationnel**. Tu peux le débrancher l'écran et lui parler seulement via le PC via WiFi.
 
 ## 🚀 Utilisation daily
 
