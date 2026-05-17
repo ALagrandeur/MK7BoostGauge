@@ -52,14 +52,37 @@ else
 fi
 
 # 2. Add modules-load=dwc2,g_ether to cmdline.txt (must be on the single line)
-if ! grep -q "modules-load=dwc2,g_ether" "$CMDLINE_TXT"; then
-  echo "==> Adding modules-load=dwc2,g_ether to cmdline.txt"
-  # Insert before 'rootwait' (or at the end if rootwait not found)
-  sed -i 's| rootwait| modules-load=dwc2,g_ether rootwait|' "$CMDLINE_TXT" || \
-    sed -i 's|$| modules-load=dwc2,g_ether|' "$CMDLINE_TXT"
+# IMPORTANT: cmdline.txt is a single line. Any newline = boot break.
+# Multiple cases to handle:
+#   - Already has 'g_ether' -> nothing to do
+#   - Has 'g_serial' or other -> replace with g_ether
+#   - Has no modules-load    -> add it (prefer before 'rootwait', else end-of-line)
+
+if grep -q "modules-load=.*g_ether" "$CMDLINE_TXT"; then
+  echo "==> modules-load g_ether already present, skipping"
+elif grep -q "modules-load=" "$CMDLINE_TXT"; then
+  echo "==> Replacing existing modules-load with dwc2,g_ether"
+  # Replace any existing modules-load=... with dwc2,g_ether
+  sed -i 's|modules-load=[^ ]*|modules-load=dwc2,g_ether|' "$CMDLINE_TXT"
 else
-  echo "==> modules-load already present in cmdline.txt, skipping"
+  echo "==> Adding modules-load=dwc2,g_ether to cmdline.txt"
+  if grep -q " rootwait" "$CMDLINE_TXT"; then
+    sed -i 's| rootwait| modules-load=dwc2,g_ether rootwait|' "$CMDLINE_TXT"
+  else
+    # Append at end of single line (no rootwait found — unusual but handled)
+    sed -i 's|$| modules-load=dwc2,g_ether|' "$CMDLINE_TXT"
+  fi
 fi
+
+# VERIFY the modification took effect
+if ! grep -q "modules-load=.*g_ether" "$CMDLINE_TXT"; then
+  echo "==> ERROR: modules-load=dwc2,g_ether NOT in cmdline.txt after edit!"
+  echo "==> Manual fix required:"
+  echo "    sudo nano $CMDLINE_TXT"
+  echo "    Add 'modules-load=dwc2,g_ether ' before 'rootwait' (keep single line!)"
+  exit 1
+fi
+echo "==> Verified: cmdline.txt now has modules-load=dwc2,g_ether"
 
 # 3. Show resulting cmdline.txt
 echo ""
