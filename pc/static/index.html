@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MK7BoostGauge</title>
+<link rel="stylesheet" href="/style.css?v=1">
+</head>
+<body>
+
+<header>
+  <h1>MK7BoostGauge <span class="muted small">v3</span></h1>
+  <div id="pi-status-pill" class="pill pill-unknown">Pi: ?</div>
+</header>
+
+<main>
+
+  <!-- ===================================================================
+       CARD: Cluster boost gauge config
+       =================================================================== -->
+  <section class="card card-cluster">
+    <h2>🎯 Configuration cluster</h2>
+    <p class="muted small">Paramètres du mapping MAP (mbar) → byte coolant cluster.
+       Modifie les valeurs ici, puis clique <b>Envoyer au PI</b> en bas.</p>
+
+    <div class="row">
+      <label>MAP min (mbar) <input type="number" id="cfg-map_min_mbar" min="0" max="4000" step="10" value="300"></label>
+      <label>MAP max (mbar) <input type="number" id="cfg-map_max_mbar" min="0" max="4000" step="10" value="2500"></label>
+    </div>
+    <div class="row">
+      <label>Scale <input type="number" id="cfg-scale" min="0.1" max="3.0" step="0.05" value="1.0"></label>
+      <label>Offset (°C) <input type="number" id="cfg-offset_c" min="-50" max="50" step="1" value="0"></label>
+    </div>
+    <div class="row">
+      <label>Fréquence TX (Hz) <input type="number" id="cfg-tx_rate_hz" min="5" max="50" step="1" value="25"></label>
+    </div>
+
+    <p class="muted small fixed-note">
+      🔒 <b>Fixé en interne</b> : Temp min = 50°C, Temp max = 130°C,
+      formule = linéaire avec saut zone morte 80-110°C.
+    </p>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Test Mode (live — sends directly on click, no Envoyer button)
+       =================================================================== -->
+  <section class="card card-testmode">
+    <h2>🧪 Mode Test Cluster <span class="muted small">(envoi direct au Pi)</span></h2>
+    <p class="muted small">Force une température fixe au cluster sans toucher aux sliders.
+       <b>Chaque clic envoie immédiatement</b> au Pi (mode live).</p>
+
+    <div id="testmode-banner" class="testmode-banner" style="display:none">
+      ⚠️ MODE TEST ACTIF — TX cluster forcé à <span id="testmode-active-temp">90</span>°C
+    </div>
+
+    <div class="row">
+      <label>Température (°C)
+        <input type="number" id="cfg-test_mode_temp_c" min="0" max="150" step="1" value="90">
+      </label>
+    </div>
+
+    <div class="row testmode-presets">
+      <button type="button" class="secondary preset-btn" data-temp="50">50°C (bas)</button>
+      <button type="button" class="secondary preset-btn" data-temp="80">80°C (bord BAS zone morte)</button>
+      <button type="button" class="secondary preset-btn" data-temp="90">90°C (centre)</button>
+      <button type="button" class="secondary preset-btn" data-temp="110">110°C (bord HAUT zone morte)</button>
+      <button type="button" class="secondary preset-btn" data-temp="130">130°C (rouge)</button>
+    </div>
+
+    <div class="actions">
+      <button id="btn-testmode-toggle">▶ Activer mode test</button>
+      <button id="btn-testmode-stop" class="secondary danger" style="display:none">■ ARRÊTER</button>
+    </div>
+    <p class="muted small" id="testmode-status">Mode test inactif.</p>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Live Pi status (Transmission Input)
+       =================================================================== -->
+  <section class="card card-status">
+    <h2>📡 État live du Pi</h2>
+    <p class="muted small">Lecture en temps réel (~1s). Polling activé tant que cette page est ouverte.</p>
+
+    <div class="grid-live">
+      <div>
+        <span class="lbl">Levier</span>
+        <span id="live-lever" class="value-big">—</span>
+      </div>
+      <div>
+        <span class="lbl">Mode</span>
+        <span id="live-mode" class="value-big">—</span>
+      </div>
+      <div>
+        <span class="lbl">Byte envoyé</span>
+        <span id="live-byte" class="value-mono">0x—</span>
+      </div>
+      <div>
+        <span class="lbl">Temp affichée cluster</span>
+        <span id="live-temp" class="value-mono">— °C</span>
+      </div>
+      <div>
+        <span class="lbl">TX count</span>
+        <span id="live-tx" class="value-mono">0</span>
+      </div>
+      <div>
+        <span class="lbl">RX cluster</span>
+        <span id="live-rx" class="value-mono">0</span>
+      </div>
+    </div>
+    <p class="muted small" id="live-age">En attente connexion Pi...</p>
+  </section>
+
+  <!-- ===================================================================
+       BIG ACTION: Send to Pi
+       =================================================================== -->
+  <section class="card card-action">
+    <button id="btn-send" class="big-btn">📤 Envoyer au Pi</button>
+    <p class="muted small">Envoie la configuration actuelle (les 5 sliders ci-dessus) au Pi.
+       <br>Mode test envoie automatiquement à chaque clic preset.</p>
+    <div id="send-status" class="send-status"></div>
+  </section>
+
+  <!-- ===================================================================
+       CARD: Pi connection settings
+       =================================================================== -->
+  <section class="card card-pi">
+    <h2>🔌 Connexion Pi</h2>
+    <div class="row">
+      <label>Hostname/IP <input type="text" id="cfg-pi_host" value="boostgauge.local"></label>
+      <label>Port <input type="number" id="cfg-pi_port" min="1" max="65535" value="8765"></label>
+    </div>
+    <div class="actions">
+      <button id="btn-test-pi" class="secondary">🔍 Tester connexion</button>
+    </div>
+    <p class="muted small" id="ping-result">—</p>
+  </section>
+
+</main>
+
+<footer>
+  <span id="conn-status" class="muted">Local UI sur http://localhost:8080</span>
+  <span class="muted">v3 — MK7BoostGauge</span>
+</footer>
+
+<script src="/app.js?v=1"></script>
+</body>
+</html>

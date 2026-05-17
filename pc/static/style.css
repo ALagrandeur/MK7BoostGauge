@@ -1,0 +1,95 @@
+:root {
+  --bg: #0e1116;
+  --card: #1a1f29;
+  --text: #e8eaed;
+  --muted: #8b95a5;
+  --accent: #4c9aff;
+  --boost: #ff5e5e;
+  --temp: #4ddb8a;
+  --waiting: #ffb84d;
+  --test: #ff8c00;
+  --border: #2a313d;
+  --danger: #ff6b6b;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+       background: var(--bg); color: var(--text); font-size: 16px; }
+
+header { display: flex; align-items: center; justify-content: space-between;
+         padding: 14px 20px; border-bottom: 1px solid var(--border); }
+header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+
+.pill { padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 13px; }
+.pill-ok      { background: var(--temp); color: #002918; }
+.pill-fail    { background: var(--danger); color: #fff; }
+.pill-unknown { background: var(--muted); color: #fff; }
+
+main { padding: 16px; max-width: 720px; margin: 0 auto; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+        padding: 16px; margin-bottom: 16px; }
+.card h2 { margin: 0 0 10px; font-size: 16px; color: var(--muted); font-weight: 500; }
+
+.card-cluster  { border-left: 4px solid var(--temp); }
+.card-testmode { border-left: 4px solid var(--test); background: #1c1814; }
+.card-status   { border-left: 4px solid var(--accent); }
+.card-action   { border-left: 4px solid var(--boost); text-align: center; }
+.card-pi       { border-left: 4px solid var(--muted); }
+
+.row { display: flex; gap: 10px; margin-bottom: 10px; }
+.row label { flex: 1; display: flex; flex-direction: column; gap: 4px;
+             font-size: 13px; color: var(--muted); }
+.row input { background: #0a0d12; border: 1px solid var(--border); color: var(--text);
+             padding: 8px 10px; border-radius: 6px; font-size: 16px;
+             font-variant-numeric: tabular-nums; }
+.row input:focus { outline: none; border-color: var(--accent); }
+
+.actions { display: flex; gap: 10px; margin-top: 12px; }
+button { flex: 1; padding: 10px 16px; border-radius: 8px; border: none; cursor: pointer;
+         font-size: 15px; font-weight: 600; background: var(--accent); color: #fff; }
+button.secondary { background: #2a313d; color: var(--text); }
+button.danger { background: var(--danger); }
+button:active { transform: scale(0.98); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.muted { color: var(--muted); font-size: 12px; }
+.small { font-size: 12px; }
+.fixed-note { background: #131820; padding: 10px; border-radius: 6px; margin-top: 10px; }
+
+/* Test Mode */
+.testmode-banner { background: var(--test); color: #1c1814; font-weight: 700;
+                   padding: 10px 14px; border-radius: 6px; text-align: center;
+                   margin-bottom: 12px; font-size: 14px;
+                   animation: pulse-bg 1.5s ease-in-out infinite; }
+@keyframes pulse-bg {
+  0%, 100% { background: var(--test); }
+  50%      { background: #ffae3d; }
+}
+.testmode-presets { flex-wrap: wrap; gap: 6px; }
+.preset-btn { font-size: 12px; padding: 6px 10px; flex: 1 1 30%; min-width: 0; }
+
+/* Live status grid */
+.grid-live { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.grid-live > div { background: #131820; border-radius: 8px; padding: 10px;
+                   display: flex; flex-direction: column; gap: 4px; }
+.lbl { font-size: 12px; color: var(--muted); }
+.value-big  { font-size: 22px; font-weight: 700; }
+.value-mono { font-size: 16px; font-family: ui-monospace, monospace;
+              font-variant-numeric: tabular-nums; }
+.mode-BOOST { color: var(--boost); }
+.mode-TEMP  { color: var(--temp); }
+.mode-TEST  { color: var(--test); }
+.mode-WAITING { color: var(--waiting); }
+
+/* Big "Send to Pi" button */
+.big-btn { font-size: 22px; padding: 22px; background: var(--boost); width: 100%;
+           font-weight: 700; }
+.big-btn:hover { background: #ff7a7a; }
+.send-status { margin-top: 10px; min-height: 20px; padding: 8px; border-radius: 6px;
+               font-size: 14px; }
+.send-status.ok   { background: #1d3325; color: var(--temp); }
+.send-status.fail { background: #3a1c1c; color: var(--danger); }
+
+footer { display: flex; justify-content: space-between; padding: 12px 20px;
+         border-top: 1px solid var(--border); margin-top: 20px; }
