@@ -1,23 +1,33 @@
-/* MK7BoostGauge v3 - PC-hosted UI logic */
+/* MK7BoostGauge v3.1 - PC-hosted UI logic */
 
 const $ = (id) => document.getElementById(id);
 
-const CFG_FIELDS = ["map_min_mbar", "map_max_mbar", "scale", "offset_c",
-                    "tx_rate_hz", "test_mode_temp_c", "pi_host", "pi_port"];
+const CFG_FIELDS = [
+  // Cluster mapping
+  "map_min_mbar", "map_max_mbar", "scale", "offset_c", "tx_rate_hz",
+  // MAP source
+  "map_source",
+  "obd2_req_id_hex", "obd2_resp_id_hex", "obd2_did_map_hex", "obd2_query_rate_hz",
+  "pcm_map_can_id_hex", "pcm_map_byte_offset", "pcm_map_scale", "pcm_map_offset",
+  // Pi connection
+  "pi_host", "pi_port",
+];
 
-// Hardcoded defaults (fallback if backend returns sparse config)
 const CFG_DEFAULTS = {
   map_min_mbar: 300, map_max_mbar: 2500,
   scale: 1.0, offset_c: 0, tx_rate_hz: 25,
-  test_mode_temp_c: 90,
+  map_source: "obd2_diagnostic",
+  obd2_req_id_hex: "0x7E0", obd2_resp_id_hex: "0x7E8",
+  obd2_did_map_hex: "0x39C0", obd2_query_rate_hz: 5,
+  pcm_map_can_id_hex: "0x0", pcm_map_byte_offset: 0,
+  pcm_map_scale: 1.0, pcm_map_offset: 0.0,
   pi_host: "boostgauge.local", pi_port: 8765,
 };
 
-let testModeActive = false;
 let pcConfigCache = {};
 
 // ============================================================
-//  Load PC config from server (pc_config.json)
+//  Load + save PC config
 // ============================================================
 
 async function loadPcConfig() {
@@ -26,12 +36,12 @@ async function loadPcConfig() {
     const cfg = await r.json();
     pcConfigCache = cfg;
     fillFields(cfg);
-    testModeActive = !!cfg.test_mode_active;
-    applyTestmodeUI();
+    applyMapSourceUI(cfg.map_source);
     return cfg;
   } catch (e) {
     console.error("Could not load PC config:", e);
     fillFields(CFG_DEFAULTS);
+    applyMapSourceUI(CFG_DEFAULTS.map_source);
     return CFG_DEFAULTS;
   }
 }
@@ -40,7 +50,16 @@ function fillFields(cfg) {
   cfg = cfg || {};
   CFG_FIELDS.forEach(f => {
     const el = $("cfg-" + f);
-    if (!el) return;
+    if (!el) {
+      // map_source is radio buttons, not a single id
+      if (f === "map_source") {
+        const val = cfg[f] !== undefined ? cfg[f] : CFG_DEFAULTS[f];
+        document.querySelectorAll('input[name="map_source"]').forEach(r => {
+          r.checked = (r.value === val);
+        });
+      }
+      return;
+    }
     let v = cfg[f];
     if (v === undefined || v === null) v = CFG_DEFAULTS[f];
     if (v === undefined) return;
@@ -50,21 +69,27 @@ function fillFields(cfg) {
 
 function readFieldsAsPatch() {
   const patch = {};
+  // text/number fields
   CFG_FIELDS.forEach(f => {
     const el = $("cfg-" + f);
     if (!el || el.value === "") return;
-    if (f === "pi_host") patch[f] = el.value.trim();
-    else if (f === "pi_port") patch[f] = parseInt(el.value);
-    else if (f === "scale" || f === "offset_c" || f === "test_mode_temp_c")
-      patch[f] = parseFloat(el.value);
-    else patch[f] = parseInt(el.value);
+    const v = el.value;
+    if (f === "pi_host" || f === "obd2_req_id_hex" || f === "obd2_resp_id_hex"
+        || f === "obd2_did_map_hex" || f === "pcm_map_can_id_hex") {
+      patch[f] = v.trim();
+    } else if (f === "pi_port" || f === "tx_rate_hz" || f === "obd2_query_rate_hz"
+               || f === "pcm_map_byte_offset" || f === "map_min_mbar"
+               || f === "map_max_mbar" || f === "offset_c") {
+      patch[f] = parseInt(v);
+    } else {
+      patch[f] = parseFloat(v);
+    }
   });
+  // map_source from radio
+  const checked = document.querySelector('input[name="map_source"]:checked');
+  if (checked) patch.map_source = checked.value;
   return patch;
 }
-
-// ============================================================
-//  Save PC config (auto on every field change)
-// ============================================================
 
 async function savePcConfig(patch) {
   Object.assign(pcConfigCache, patch);
@@ -81,25 +106,38 @@ async function savePcConfig(patch) {
   }
 }
 
-// Auto-save on field blur (so settings persist even without "Send")
+// Auto-save when a field loses focus
 document.addEventListener("blur", (e) => {
   if (e.target && e.target.id && e.target.id.startsWith("cfg-")) {
-    const patch = readFieldsAsPatch();
-    savePcConfig(patch);
+    savePcConfig(readFieldsAsPatch());
   }
 }, true);
 
+// MAP source radio: save + toggle visible fields
+document.querySelectorAll('input[name="map_source"]').forEach(radio => {
+  radio.addEventListener("change", () => {
+    applyMapSourceUI(radio.value);
+    savePcConfig(readFieldsAsPatch());
+  });
+});
+
+function applyMapSourceUI(source) {
+  $("obd2-fields").style.display = (source === "obd2_diagnostic") ? "" : "none";
+  $("pcm-fields").style.display = (source === "pcm_broadcast") ? "" : "none";
+  $("live-map-label").textContent = (source === "obd2_diagnostic")
+    ? "MAP (CAN1 OBD2)" : "MAP (CAN1 PCM broadcast)";
+}
+
 // ============================================================
-//  Send to Pi (main button)
+//  Send to Pi
 // ============================================================
 
-async function sendToPi(extraPatch = {}) {
+async function sendToPi() {
   const status = $("send-status");
   status.className = "send-status";
   status.textContent = "⏳ Envoi en cours...";
 
-  // First save fields locally
-  const patch = { ...readFieldsAsPatch(), ...extraPatch };
+  const patch = readFieldsAsPatch();
   await savePcConfig(patch);
 
   try {
@@ -113,6 +151,7 @@ async function sendToPi(extraPatch = {}) {
       status.className = "send-status ok";
       status.textContent = "✓ " + (data.message || "Envoyé au Pi");
       pingPi();
+      pollPiStatus();
     } else {
       status.className = "send-status fail";
       status.textContent = "✗ " + (data.message || "Échec envoi");
@@ -125,64 +164,7 @@ async function sendToPi(extraPatch = {}) {
   }
 }
 
-$("btn-send").addEventListener("click", () => sendToPi());
-
-// ============================================================
-//  Test mode (LIVE - send on every preset click)
-// ============================================================
-
-function applyTestmodeUI() {
-  const banner = $("testmode-banner");
-  const startBtn = $("btn-testmode-toggle");
-  const stopBtn = $("btn-testmode-stop");
-  const status = $("testmode-status");
-  const tempInput = $("cfg-test_mode_temp_c");
-
-  if (testModeActive) {
-    banner.style.display = "block";
-    $("testmode-active-temp").textContent = tempInput ? tempInput.value : "90";
-    startBtn.textContent = "🔄 Mettre à jour température";
-    stopBtn.style.display = "block";
-    status.textContent = "✅ Test mode actif - chaque preset envoie au Pi instantanément";
-    status.style.color = "var(--boost)";
-  } else {
-    banner.style.display = "none";
-    startBtn.textContent = "▶ Activer mode test";
-    stopBtn.style.display = "none";
-    status.textContent = "Mode test inactif.";
-    status.style.color = "";
-  }
-}
-
-async function setTestMode(active, temp_c = null) {
-  testModeActive = active;
-  const patch = { test_mode_active: active };
-  if (temp_c !== null) patch.test_mode_temp_c = parseFloat(temp_c);
-  await sendToPi(patch);
-  applyTestmodeUI();
-}
-
-$("btn-testmode-toggle").addEventListener("click", () => {
-  setTestMode(true);
-});
-
-$("btn-testmode-stop").addEventListener("click", () => {
-  setTestMode(false);
-});
-
-// Preset buttons - LIVE: each click sends immediately
-document.querySelectorAll(".preset-btn").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const t = parseFloat(btn.dataset.temp);
-    $("cfg-test_mode_temp_c").value = t;
-    // If test mode is active, send immediately. Otherwise just fill the field.
-    if (testModeActive) {
-      setTestMode(true, t);
-    } else {
-      savePcConfig({ test_mode_temp_c: t });
-    }
-  });
-});
+$("btn-send").addEventListener("click", sendToPi);
 
 // ============================================================
 //  Pi ping + live status polling
@@ -218,43 +200,55 @@ async function pollPiStatus() {
     const env = await r.json();
     if (!env.ok || !env.data) {
       $("live-lever").textContent = "—";
-      $("live-mode").textContent = "—";
-      $("live-mode").className = "value-big";
-      $("live-byte").textContent = "0x—";
-      $("live-temp").textContent = "— °C";
-      $("live-age").textContent = "Pi pas joignable";
+      $("live-mode").textContent = "Pi pas joignable";
+      $("live-map").textContent = "—";
+      $("live-map-age").textContent = "—";
+      $("live-coolant").textContent = "—";
+      $("live-coolant-age").textContent = "—";
       return;
     }
     const s = env.data;
+    // Lever + mode
     $("live-lever").textContent = s.lever || "—";
-    $("live-mode").textContent = s.mode || "—";
-    $("live-mode").className = "value-big mode-" + (s.mode || "WAITING");
-    $("live-byte").textContent = "0x" + (s.last_motor09_byte || 0).toString(16).toUpperCase().padStart(2, "0");
-    $("live-temp").textContent = (s.last_motor09_temp_c !== undefined ? s.last_motor09_temp_c.toFixed(1) : "—") + " °C";
-    if (s.can) {
-      $("live-tx").textContent = s.can.tx_count;
-      $("live-rx").textContent = s.can.rx_cluster_count;
-    }
-    if (s.lever_age_s != null) {
-      $("live-age").textContent = "Dernière frame WBA_03: " + s.lever_age_s.toFixed(1) + "s";
+    $("live-mode").textContent = s.mode ? `Mode: ${s.mode}` : "—";
+
+    // MAP
+    if (s.map_mbar !== null && s.map_mbar !== undefined) {
+      $("live-map").textContent = s.map_mbar.toFixed(0) + " mbar";
+      const age = s.map_age_s != null ? s.map_age_s.toFixed(1) + "s" : "?";
+      $("live-map-age").textContent = "âge: " + age;
     } else {
-      $("live-age").textContent = "Aucune frame WBA_03 reçue";
+      $("live-map").textContent = "— mbar";
+      $("live-map-age").textContent = "pas de donnée";
+    }
+
+    // Coolant real (sniffed from CAN0 Motor_09 byte 0)
+    if (s.coolant_real_c !== null && s.coolant_real_c !== undefined) {
+      $("live-coolant").textContent = s.coolant_real_c.toFixed(1) + " °C";
+      const age = s.coolant_age_s != null ? s.coolant_age_s.toFixed(1) + "s" : "?";
+      $("live-coolant-age").textContent = "âge: " + age;
+    } else {
+      $("live-coolant").textContent = "— °C";
+      $("live-coolant-age").textContent = "pas de frame Motor_09";
     }
   } catch (e) {
-    // silent — polling can fail occasionally
+    // silent
   }
 }
 
+$("btn-refresh").addEventListener("click", () => {
+  pollPiStatus();
+  pingPi();
+});
+
 // ============================================================
-//  Initial load + start polling
+//  Initial load + polling
 // ============================================================
 
 (async () => {
   await loadPcConfig();
   pingPi();
   pollPiStatus();
-  // Poll Pi status every 1 sec
-  setInterval(pollPiStatus, 1000);
-  // Ping Pi every 5 sec to keep status pill fresh
-  setInterval(pingPi, 5000);
+  setInterval(pollPiStatus, 1000);   // 1Hz live status
+  setInterval(pingPi, 5000);          // 0.2Hz pi ping
 })();

@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=1">
+<link rel="stylesheet" href="/style.css?v=2">
 </head>
 <body>
 
 <header>
-  <h1>MK7BoostGauge <span class="muted small">v3</span></h1>
+  <h1>MK7BoostGauge <span class="muted small">v3.1</span></h1>
   <div id="pi-status-pill" class="pill pill-unknown">Pi: ?</div>
 </header>
 
@@ -20,8 +20,7 @@
        =================================================================== -->
   <section class="card card-cluster">
     <h2>🎯 Configuration cluster</h2>
-    <p class="muted small">Paramètres du mapping MAP (mbar) → byte coolant cluster.
-       Modifie les valeurs ici, puis clique <b>Envoyer au PI</b> en bas.</p>
+    <p class="muted small">Mapping MAP (mbar) → byte coolant du cluster. Clic <b>Envoyer au PI</b> en bas pour appliquer.</p>
 
     <div class="row">
       <label>MAP min (mbar) <input type="number" id="cfg-map_min_mbar" min="0" max="4000" step="10" value="300"></label>
@@ -36,78 +35,113 @@
     </div>
 
     <p class="muted small fixed-note">
-      🔒 <b>Fixé en interne</b> : Temp min = 50°C, Temp max = 130°C,
-      formule = linéaire avec saut zone morte 80-110°C.
+      🔒 <b>Fixé en interne</b> : Temp min 50°C, Temp max 130°C,
+      saut zone morte 80-110°C.
     </p>
   </section>
 
   <!-- ===================================================================
-       CARD: Test Mode (live — sends directly on click, no Envoyer button)
+       CARD: MAP source selector
        =================================================================== -->
-  <section class="card card-testmode">
-    <h2>🧪 Mode Test Cluster <span class="muted small">(envoi direct au Pi)</span></h2>
-    <p class="muted small">Force une température fixe au cluster sans toucher aux sliders.
-       <b>Chaque clic envoie immédiatement</b> au Pi (mode live).</p>
+  <section class="card card-map-source">
+    <h2>📡 Source de la valeur MAP</h2>
+    <p class="muted small">D'où vient la pression MAP que le Pi utilise pour driver l'aiguille en mode BOOST ?</p>
 
-    <div id="testmode-banner" class="testmode-banner" style="display:none">
-      ⚠️ MODE TEST ACTIF — TX cluster forcé à <span id="testmode-active-temp">90</span>°C
-    </div>
-
-    <div class="row">
-      <label>Température (°C)
-        <input type="number" id="cfg-test_mode_temp_c" min="0" max="150" step="1" value="90">
+    <div class="toggle-group">
+      <label class="toggle-opt">
+        <input type="radio" name="map_source" value="obd2_diagnostic">
+        <span class="toggle-label">
+          <b>OBD2 Diagnostic (CAN1 → port OBD-II)</b><br>
+          <span class="small muted">Le Pi envoie des requêtes UDS (~5 Hz) à l'ECU moteur via CAN1 branché au port OBD-II. Lit la réponse.</span>
+        </span>
+      </label>
+      <label class="toggle-opt">
+        <input type="radio" name="map_source" value="pcm_broadcast">
+        <span class="toggle-label">
+          <b>PCM Broadcast (CAN1 → bus Powertrain direct)</b><br>
+          <span class="small muted">Le Pi écoute passivement les frames diffusées par le moteur (sans envoyer). Plus rapide, mais besoin de connaître l'ID exact.</span>
+        </span>
       </label>
     </div>
 
-    <div class="row testmode-presets">
-      <button type="button" class="secondary preset-btn" data-temp="50">50°C (bas)</button>
-      <button type="button" class="secondary preset-btn" data-temp="80">80°C (bord BAS zone morte)</button>
-      <button type="button" class="secondary preset-btn" data-temp="90">90°C (centre)</button>
-      <button type="button" class="secondary preset-btn" data-temp="110">110°C (bord HAUT zone morte)</button>
-      <button type="button" class="secondary preset-btn" data-temp="130">130°C (rouge)</button>
+    <!-- OBD2 settings (visible if obd2_diagnostic) -->
+    <div id="obd2-fields" class="map-source-fields">
+      <h3 class="map-source-subtitle">⚙️ Adresses UDS (modifiables)</h3>
+      <div class="row">
+        <label>Requête CAN ID (vers ECU)
+          <input type="text" id="cfg-obd2_req_id_hex" value="0x7E0" placeholder="0x7E0">
+        </label>
+        <label>Réponse CAN ID (depuis ECU)
+          <input type="text" id="cfg-obd2_resp_id_hex" value="0x7E8" placeholder="0x7E8">
+        </label>
+      </div>
+      <div class="row">
+        <label>DID MAP (Data Identifier)
+          <input type="text" id="cfg-obd2_did_map_hex" value="0x39C0" placeholder="0x39C0">
+        </label>
+        <label>Fréquence query (Hz)
+          <input type="number" id="cfg-obd2_query_rate_hz" min="1" max="50" step="1" value="5">
+        </label>
+      </div>
+      <p class="muted small">Défauts pour VW MQB Alltrack 2017 : Req 0x7E0, Resp 0x7E8, DID 0x39C0 (Saugrohrdruck).</p>
     </div>
 
-    <div class="actions">
-      <button id="btn-testmode-toggle">▶ Activer mode test</button>
-      <button id="btn-testmode-stop" class="secondary danger" style="display:none">■ ARRÊTER</button>
+    <!-- PCM broadcast settings (visible if pcm_broadcast) -->
+    <div id="pcm-fields" class="map-source-fields" style="display:none">
+      <h3 class="map-source-subtitle">⚙️ Adresse broadcast (à identifier)</h3>
+      <div class="row">
+        <label>CAN ID du frame MAP
+          <input type="text" id="cfg-pcm_map_can_id_hex" value="0x0" placeholder="0x130 par ex.">
+        </label>
+        <label>Index byte (0-7)
+          <input type="number" id="cfg-pcm_map_byte_offset" min="0" max="7" step="1" value="0">
+        </label>
+      </div>
+      <div class="row">
+        <label>Scale (mbar/byte)
+          <input type="number" id="cfg-pcm_map_scale" min="0.01" max="100" step="0.01" value="1.0">
+        </label>
+        <label>Offset (mbar)
+          <input type="number" id="cfg-pcm_map_offset" step="0.1" value="0.0">
+        </label>
+      </div>
+      <p class="muted small">À configurer une fois identifié via capture SavvyCAN du Powertrain CAN moteur tournant.</p>
     </div>
-    <p class="muted small" id="testmode-status">Mode test inactif.</p>
   </section>
 
   <!-- ===================================================================
-       CARD: Live Pi status (Transmission Input)
+       CARD: Live state from Pi (lever + MAP + coolant)
        =================================================================== -->
   <section class="card card-status">
-    <h2>📡 État live du Pi</h2>
-    <p class="muted small">Lecture en temps réel (~1s). Polling activé tant que cette page est ouverte.</p>
+    <h2>📊 État live du Pi</h2>
+    <p class="muted small">Polling automatique 1×/sec. Clic <b>Rafraîchir</b> pour query immédiat.</p>
 
     <div class="grid-live">
       <div>
-        <span class="lbl">Levier</span>
+        <span class="lbl">Position levier transmission</span>
         <span id="live-lever" class="value-big">—</span>
+        <span id="live-mode" class="lbl">—</span>
       </div>
       <div>
-        <span class="lbl">Mode</span>
-        <span id="live-mode" class="value-big">—</span>
+        <span class="lbl"><span id="live-map-label">MAP (OBD2)</span></span>
+        <span id="live-map" class="value-big">—</span>
+        <span id="live-map-age" class="lbl">—</span>
       </div>
       <div>
-        <span class="lbl">Byte envoyé</span>
-        <span id="live-byte" class="value-mono">0x—</span>
-      </div>
-      <div>
-        <span class="lbl">Temp affichée cluster</span>
-        <span id="live-temp" class="value-mono">— °C</span>
-      </div>
-      <div>
-        <span class="lbl">TX count</span>
-        <span id="live-tx" class="value-mono">0</span>
-      </div>
-      <div>
-        <span class="lbl">RX cluster</span>
-        <span id="live-rx" class="value-mono">0</span>
+        <span class="lbl">Coolant réel (sniff CAN0)</span>
+        <span id="live-coolant" class="value-big">—</span>
+        <span id="live-coolant-age" class="lbl">—</span>
       </div>
     </div>
-    <p class="muted small" id="live-age">En attente connexion Pi...</p>
+
+    <div class="actions">
+      <button id="btn-refresh" class="secondary">🔄 Rafraîchir maintenant</button>
+    </div>
+    <p class="muted small live-note">
+      ℹ️ Coolant réel = ce qui circule sur CAN0 byte 0 de Motor_09 (0x647).<br>
+      Quand le Pi est en mode TEMP (D/P/R), c'est la vraie temp gateway.<br>
+      Quand en BOOST (S/M/N), c'est notre override.
+    </p>
   </section>
 
   <!-- ===================================================================
@@ -115,8 +149,7 @@
        =================================================================== -->
   <section class="card card-action">
     <button id="btn-send" class="big-btn">📤 Envoyer au Pi</button>
-    <p class="muted small">Envoie la configuration actuelle (les 5 sliders ci-dessus) au Pi.
-       <br>Mode test envoie automatiquement à chaque clic preset.</p>
+    <p class="muted small">Envoie TOUS les paramètres (sliders + source MAP) au Pi.</p>
     <div id="send-status" class="send-status"></div>
   </section>
 
@@ -138,10 +171,10 @@
 </main>
 
 <footer>
-  <span id="conn-status" class="muted">Local UI sur http://localhost:8080</span>
-  <span class="muted">v3 — MK7BoostGauge</span>
+  <span class="muted">Local UI sur http://localhost:8080</span>
+  <span class="muted">v3.1 — MK7BoostGauge</span>
 </footer>
 
-<script src="/app.js?v=1"></script>
+<script src="/app.js?v=2"></script>
 </body>
 </html>
