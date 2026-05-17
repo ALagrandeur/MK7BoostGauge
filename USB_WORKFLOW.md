@@ -23,6 +23,17 @@ Ce script fait :
 
 ### B. Sur ton PC Windows (1× après le reboot du Pi) :
 
+**B1 — Autoriser PowerShell à exécuter les scripts** (Windows bloque par défaut)
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# Tape O puis Enter pour confirmer
+```
+
+> Pratique standard recommandée par Microsoft. Tu ne le refais jamais.
+
+**B2 — Setup SSH key**
+
 ```powershell
 cd C:\Users\AntoineLagrandeur\MK7BoostGauge
 git pull
@@ -30,6 +41,9 @@ git pull
 ```
 
 → À partir de maintenant, plus aucun mot de passe à taper pour les updates.
+
+> ⚠️ **Si tu vois "Impossible de charger le fichier ... car l'exécution de scripts est désactivée"** :
+> tu n'as pas fait l'étape B1. Lance la commande `Set-ExecutionPolicy` ci-dessus puis réessaie.
 
 ---
 
