@@ -1,4 +1,4 @@
-/* MK7BoostGauge v3.1 - PC-hosted UI logic */
+/* MK7BoostGauge v3.2 - PC-hosted UI logic */
 
 const $ = (id) => document.getElementById(id);
 
@@ -281,6 +281,96 @@ async function pingPi() {
 
 $("btn-test-pi").addEventListener("click", pingPi);
 
+function clearBusHealthUI(reason) {
+  ["cluster", "can1"].forEach(ch => {
+    $(`bus-${ch}-tx-ok`).textContent = "—";
+    $(`bus-${ch}-tx-fail`).textContent = "—";
+    $(`bus-${ch}-rx`).textContent = "—";
+    $(`bus-${ch}-ratio`).textContent = "—";
+    $(`bus-${ch}-last-ok`).textContent = "—";
+    $(`bus-${ch}-err`).textContent = "—";
+  });
+  $("bus-blocked-airbag").textContent = "—";
+  const banner = $("bus-health-banner");
+  banner.style.display = "block";
+  banner.className = "bus-banner bus-banner-unknown";
+  banner.textContent = reason || "Pi pas joignable — aucune donnée bus";
+}
+
+function ageStr(age) {
+  if (age == null) return "jamais";
+  if (age < 1) return "< 1s";
+  if (age < 60) return age.toFixed(1) + "s";
+  if (age < 3600) return (age / 60).toFixed(1) + " min";
+  return (age / 3600).toFixed(1) + " h";
+}
+
+function updateBusHealth(can) {
+  if (!can) {
+    clearBusHealthUI("Pas de données CAN dans la réponse");
+    return;
+  }
+  $("bus-cluster-rx").textContent = can.rx_cluster_count ?? "—";
+  $("bus-can1-rx").textContent    = can.rx_can1_count ?? "—";
+  $("bus-blocked-airbag").textContent = can.blocked_airbag ?? "—";
+
+  const fillBlock = (ch, h) => {
+    if (!h) {
+      $(`bus-${ch}-tx-ok`).textContent = "—";
+      $(`bus-${ch}-tx-fail`).textContent = "—";
+      $(`bus-${ch}-ratio`).textContent = "—";
+      $(`bus-${ch}-last-ok`).textContent = "—";
+      $(`bus-${ch}-err`).textContent = "—";
+      return { ok: 0, fail: 0, ratio: null };
+    }
+    $(`bus-${ch}-tx-ok`).textContent = h.tx_ok;
+    $(`bus-${ch}-tx-fail`).textContent = h.tx_fail;
+    $(`bus-${ch}-ratio`).textContent = h.tx_ok_ratio != null
+      ? (h.tx_ok_ratio * 100).toFixed(1) + " %"
+      : "—";
+    $(`bus-${ch}-last-ok`).textContent = ageStr(h.last_tx_ok_age_s);
+    $(`bus-${ch}-err`).textContent = h.last_tx_error || "—";
+    return { ok: h.tx_ok, fail: h.tx_fail, ratio: h.tx_ok_ratio, lastOk: h.last_tx_ok_age_s };
+  };
+
+  const cluster = fillBlock("cluster", can.cluster_health);
+  const can1    = fillBlock("can1",    can.can1_health);
+
+  // Banner logic
+  const banner = $("bus-health-banner");
+  const warnings = [];
+
+  if (can1.fail >= 5 && (can1.ratio == null || can1.ratio < 0.5)) {
+    if (can1.ok === 0) {
+      warnings.push("⛔ CAN1 : aucun TX réussi. Bus probablement muet (pas d'ACK). " +
+                    "Vérifie le câblage OBD-II (pins 6 et 14 = CAN-H/CAN-L), " +
+                    "que le moteur est ON ou cléf en position II, et que le transceiver TJA1050 " +
+                    "est alimenté en 5V (PAS 3.3V).");
+    } else {
+      warnings.push(`⚠ CAN1 : ${can1.fail} TX échoués, taux OK ${(can1.ratio*100).toFixed(0)}%. ` +
+                    `Bus instable. Dernière erreur : ${can.can1_health?.last_tx_error || "?"}`);
+    }
+  }
+  if (cluster.fail >= 5 && (cluster.ratio == null || cluster.ratio < 0.5)) {
+    warnings.push(`⚠ CAN0 (cluster) : ${cluster.fail} TX échoués. Vérifie le cluster est sous tension ` +
+                  "et que la terminaison 120Ω est correcte.");
+  }
+
+  if (warnings.length === 0) {
+    if (cluster.ok > 0 || can1.ok > 0) {
+      banner.style.display = "block";
+      banner.className = "bus-banner bus-banner-ok";
+      banner.textContent = "✓ Bus CAN en bonne santé";
+    } else {
+      banner.style.display = "none";
+    }
+  } else {
+    banner.style.display = "block";
+    banner.className = "bus-banner bus-banner-warn";
+    banner.innerHTML = warnings.map(w => `<div>${w}</div>`).join("");
+  }
+}
+
 async function pollPiStatus() {
   try {
     const r = await fetch("/api/pi_status", { cache: "no-store" });
@@ -292,6 +382,7 @@ async function pollPiStatus() {
       $("live-map-age").textContent = "—";
       $("live-coolant").textContent = "—";
       $("live-coolant-age").textContent = "—";
+      clearBusHealthUI("Pi pas joignable — aucune donnée bus");
       return;
     }
     const s = env.data;
@@ -318,6 +409,9 @@ async function pollPiStatus() {
       $("live-coolant").textContent = "— °C";
       $("live-coolant-age").textContent = "pas de frame Motor_09";
     }
+
+    // CAN bus health
+    updateBusHealth(s.can);
   } catch (e) {
     // silent
   }

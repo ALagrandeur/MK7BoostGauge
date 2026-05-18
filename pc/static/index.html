@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>MK7BoostGauge</title>
-<link rel="stylesheet" href="/style.css?v=3">
+<link rel="stylesheet" href="/style.css?v=4">
 </head>
 <body>
 
 <header>
-  <h1>MK7BoostGauge <span class="muted small">v3.1</span></h1>
+  <h1>MK7BoostGauge <span class="muted small">v3.2</span></h1>
   <div id="pi-status-pill" class="pill pill-unknown">Pi: ?</div>
 </header>
 
@@ -187,6 +187,47 @@
   </section>
 
   <!-- ===================================================================
+       CARD: CAN bus health (TX success/fail counters from Pi)
+       =================================================================== -->
+  <section class="card card-bus-health">
+    <h2>🩺 Santé des bus CAN (Pi)</h2>
+    <p class="muted small">
+      Compteurs TX/RX et taux de succès. Utile pour diagnostiquer un bus qui ne
+      répond pas (ENOBUFS = pas d'ACK = bus muet, mauvais câblage ou transceiver
+      en sous-alimentation).
+    </p>
+
+    <div id="bus-health-banner" class="bus-banner" style="display:none"></div>
+
+    <div class="grid-bus">
+      <div class="bus-block">
+        <h3 class="bus-title">🚌 CAN0 (cluster)</h3>
+        <div class="bus-row"><span class="lbl">TX OK</span><span id="bus-cluster-tx-ok" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">TX fail</span><span id="bus-cluster-tx-fail" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">RX frames</span><span id="bus-cluster-rx" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">Taux OK</span><span id="bus-cluster-ratio" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">Dernier OK</span><span id="bus-cluster-last-ok" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">Dernière erreur</span><span id="bus-cluster-err" class="bus-val small">—</span></div>
+      </div>
+
+      <div class="bus-block">
+        <h3 class="bus-title">🚌 CAN1 (OBD2/PCM)</h3>
+        <div class="bus-row"><span class="lbl">TX OK</span><span id="bus-can1-tx-ok" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">TX fail</span><span id="bus-can1-tx-fail" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">RX frames</span><span id="bus-can1-rx" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">Taux OK</span><span id="bus-can1-ratio" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">Dernier OK</span><span id="bus-can1-last-ok" class="bus-val">—</span></div>
+        <div class="bus-row"><span class="lbl">Dernière erreur</span><span id="bus-can1-err" class="bus-val small">—</span></div>
+      </div>
+    </div>
+
+    <div class="bus-row top-space">
+      <span class="lbl">Frames airbag bloquées (safety)</span>
+      <span id="bus-blocked-airbag" class="bus-val">—</span>
+    </div>
+  </section>
+
+  <!-- ===================================================================
        BIG ACTION: Send to Pi
        =================================================================== -->
   <section class="card card-action">
@@ -214,9 +255,9 @@
 
 <footer>
   <span class="muted">Local UI sur http://localhost:8080</span>
-  <span class="muted">v3.1 — MK7BoostGauge</span>
+  <span class="muted">v3.2 — MK7BoostGauge</span>
 </footer>
 
-<script src="/app.js?v=3"></script>
+<script src="/app.js?v=4"></script>
 </body>
 </html>

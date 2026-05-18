@@ -118,3 +118,31 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 footer { display: flex; justify-content: space-between; padding: 12px 20px;
          border-top: 1px solid var(--border); margin-top: 20px; }
+
+/* CAN bus health card */
+.card-bus-health { border-left: 4px solid var(--waiting); }
+.bus-banner { padding: 10px 12px; border-radius: 6px; margin: 10px 0 14px;
+              font-size: 13px; line-height: 1.5; }
+.bus-banner-ok      { background: #1d3325; color: var(--temp); }
+.bus-banner-warn    { background: #3a2a1c; color: var(--waiting);
+                      border: 1px solid #5a4020; }
+.bus-banner-unknown { background: #1a1f29; color: var(--muted);
+                      border: 1px dashed var(--border); }
+
+.grid-bus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 600px) {
+  .grid-bus { grid-template-columns: 1fr; }
+}
+.bus-block { background: #131820; border: 1px solid var(--border);
+             border-radius: 8px; padding: 10px; }
+.bus-title { margin: 0 0 8px; font-size: 13px; color: var(--muted);
+             font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+.bus-row { display: flex; justify-content: space-between; align-items: baseline;
+           padding: 4px 0; border-bottom: 1px dashed var(--border); gap: 8px; }
+.bus-row:last-child { border-bottom: none; }
+.bus-val { font-variant-numeric: tabular-nums; font-weight: 600;
+           max-width: 60%; text-align: right; word-break: break-word; }
+.bus-val.small { font-size: 11px; font-weight: 400; color: var(--muted);
+                 font-family: ui-monospace, monospace; }
+.top-space { margin-top: 12px; padding-top: 10px;
+             border-top: 1px solid var(--border); }

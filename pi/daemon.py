@@ -1,7 +1,10 @@
-"""MK7BoostGauge Pi daemon v3.1.
+"""MK7BoostGauge Pi daemon v3.2.
 
 Refactor: no test mode. MAP source = OBD2 (UDS query on CAN1) or PCM broadcast (sniff CAN1).
 Real coolant temp sniffed from CAN0 (Motor_09 byte 0).
+
+v3.2: throttled error logs + exponential backoff when CAN1 bus stuck (no ACK / ENOBUFS).
+Per-channel TX health stats exposed via /status -> can.cluster_health / can.can1_health.
 
 Endpoints:
   GET  /ping       - discovery
@@ -222,7 +225,20 @@ class BoostController:
 
     # ---------------------------------------------------- UDS query loop
     def _uds_query_loop(self) -> None:
+        """Send UDS ReadDataByIdentifier requests on CAN1.
+
+        Backoff: when consecutive TX failures (e.g. ENOBUFS = no ACK on bus),
+        progressively slow down to avoid spamming a dead/unresponsive bus.
+        Resets to nominal rate as soon as one TX succeeds.
+
+          0-2 consecutive fails  -> nominal rate (e.g. 5 Hz = 200 ms)
+          3-9 fails              -> 1 Hz
+          10-29 fails            -> 0.2 Hz (every 5s)
+          30+ fails              -> 0.05 Hz (every 20s)
+        """
         log.info("UDS query loop started")
+        consec_fail = 0
+        last_state_log = 0.0
         while not self._stop.is_set():
             cfg = dict(self.state.config)
             if cfg.get("map_source") != "obd2_diagnostic":
@@ -238,9 +254,35 @@ class BoostController:
             # ISO-TP single frame: [03 22 DID_H DID_L 00 00 00 00]
             payload = bytes([0x03, 0x22, (did >> 8) & 0xFF, did & 0xFF,
                               0x00, 0x00, 0x00, 0x00])
-            self.can.send("can1", req_id, payload)
-            rate = int(cfg.get("obd2_query_rate_hz", 5))
-            time.sleep(1.0 / max(1, rate))
+            tx_ok = self.can.send("can1", req_id, payload)
+
+            if tx_ok:
+                if consec_fail >= 3:
+                    log.info("CAN1 TX recovered after %d consecutive failures", consec_fail)
+                consec_fail = 0
+            else:
+                consec_fail += 1
+                # Log a state change every minute when bus is stuck
+                now = time.time()
+                if now - last_state_log > 60.0:
+                    log.warning("CAN1 UDS TX still failing (%d consecutive). "
+                                "Likely hardware issue: no ACK on bus, wrong wiring, "
+                                "or transceiver Vcc (TJA1050 needs 5V). Backoff active.",
+                                consec_fail)
+                    last_state_log = now
+
+            # Compute next sleep based on consecutive failures
+            nominal_rate = int(cfg.get("obd2_query_rate_hz", 5))
+            nominal_period = 1.0 / max(1, nominal_rate)
+            if consec_fail < 3:
+                period = nominal_period
+            elif consec_fail < 10:
+                period = max(nominal_period, 1.0)        # 1 Hz
+            elif consec_fail < 30:
+                period = max(nominal_period, 5.0)        # 0.2 Hz
+            else:
+                period = max(nominal_period, 20.0)       # 0.05 Hz
+            time.sleep(period)
 
     # ---------------------------------------------------- TX loop (cluster)
     def _tx_loop(self) -> None:
@@ -295,16 +337,19 @@ def create_app(state: DaemonState, controller: BoostController) -> Flask:
 
     @app.route("/ping", methods=["GET"])
     def ping():
-        return jsonify({"ok": True, "service": "MK7BoostGauge", "version": "v3.1"})
+        return jsonify({"ok": True, "service": "MK7BoostGauge", "version": "v3.2"})
 
     @app.route("/status", methods=["GET"])
     def status():
         snap = state.snapshot()
+        cm = controller.can
         snap["can"] = {
-            "tx_count": controller.can.tx_count,
-            "rx_cluster_count": controller.can.rx_cluster_count,
-            "rx_can1_count": controller.can.rx_can1_count,
-            "blocked_airbag": controller.can.blocked_airbag_count,
+            "tx_count": cm.tx_count,
+            "rx_cluster_count": cm.rx_cluster_count,
+            "rx_can1_count": cm.rx_can1_count,
+            "blocked_airbag": cm.blocked_airbag_count,
+            "cluster_health": cm.bus_health("cluster"),
+            "can1_health": cm.bus_health("can1"),
         }
         response = jsonify(snap)
         response.headers["Cache-Control"] = "no-store"
@@ -348,7 +393,7 @@ def create_app(state: DaemonState, controller: BoostController) -> Flask:
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    log.info("MK7BoostGauge daemon v3.1 starting")
+    log.info("MK7BoostGauge daemon v3.2 starting")
     state = DaemonState()
     state.config = load_config_from_disk()
 
