@@ -57,6 +57,7 @@ CRC8H2F = _gen_crc8h2f_table()
 # Per-CAN-ID constants used by the MQB checksum.
 # Subset relevant for bench test. Source: sister project webui/vw_mqb.py
 MQB_CONST: dict[int, list[int]] = {
+    0x040: [0x40] * 16,  # Airbag_01 (BENCH ONLY - never on real vehicle)
     0x3C0: [0xC3] * 16,  # Klemmen_Status_01 (wake)
     0x641: [0x47] * 16,  # Motor_Code_01    (engine code heartbeat)
     0x394: [0x47, 0x94, 0x92, 0x6A, 0x67, 0xB5, 0x0D, 0x38,
@@ -117,9 +118,13 @@ COOLANT_TAIL          = bytes([0xFD, 0xFF, 0x7F, 0x00, 0x00, 0x00, 0xC1])
 COOLANT_RATE_HZ       = 20
 
 # System Context Bundle — "alive ECUs" so cluster doesn't invalidate other signals
-# Source: sister project SYSTEM_CONTEXT_BROADCASTS
-# NB: Airbag_01 (0x040) DELIBERATELY EXCLUDED — safety policy.
+# Source: sister project UI shows bundle = Airbag_01 + ESP_05/10/20 + TSK_07 + LH_EPS_01
+#
+# IMPORTANT: Airbag_01 (0x040) included to match sister UI exactly.
+# This is BENCH ONLY — never run with --bundle on a real vehicle (it would spoof
+# the real airbag controller heartbeat, which is genuinely dangerous).
 SYSTEM_CONTEXT = [
+    {"id": 0x040, "name": "Airbag_01", "payload": bytes(8),                                        "crc": True},
     {"id": 0x106, "name": "ESP_05",    "payload": bytes(8),                                        "crc": False},
     {"id": 0x116, "name": "ESP_10",    "payload": bytes(8),                                        "crc": True},
     {"id": 0x65D, "name": "ESP_20",    "payload": bytes([0x00, 0x30, 0x2B, 0x12, 0x00, 0x00, 0xB4, 0x79]), "crc": False},
@@ -161,8 +166,8 @@ def try_recover_bus(iface: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="MK7 cluster bench test (standalone, no project deps).")
-    ap.add_argument("--iface", default="can0", help="CAN interface (default: can0)")
-    ap.add_argument("--rpm", type=int, default=1500, help="RPM to display (default: 1500)")
+    ap.add_argument("--iface", default="can1", help="CAN interface (default: can1 - can0 IRQ broken on most HATs)")
+    ap.add_argument("--rpm", type=int, default=4000, help="RPM to display (default: 4000)")
     ap.add_argument("--temp", type=float, default=130.0, help="Coolant temp C to display (default: 130)")
     ap.add_argument("--no-wake", action="store_true", help="Skip wake loop (if your gateway already broadcasts it)")
     ap.add_argument("--no-context", action="store_true", help="Skip system context bundle")

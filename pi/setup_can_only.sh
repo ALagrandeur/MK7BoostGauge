@@ -67,9 +67,12 @@ Before=network.target
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/bin/sleep 2
-# restart-ms 100 = auto-recover from bus-off after 100 ms
-ExecStart=/bin/sh -c 'ip link set can0 up type can bitrate 500000 restart-ms 100 2>/dev/null || true'
-ExecStart=/bin/sh -c 'ip link set can1 up type can bitrate 500000 restart-ms 100 2>/dev/null || true'
+# Per-interface bring-up:
+#   1. restart-ms 100 = auto-recover from bus-off
+#   2. txqueuelen 65535 = large TX queue avoids ENOBUFS spam during burst sends
+# can0 often has broken IRQ on WaveShare 2-CH HAT - configured but may fail silently
+ExecStart=/bin/sh -c 'ip link set can0 up type can bitrate 500000 restart-ms 100 2>/dev/null && ifconfig can0 txqueuelen 65535 || true'
+ExecStart=/bin/sh -c 'ip link set can1 up type can bitrate 500000 restart-ms 100 2>/dev/null && ifconfig can1 txqueuelen 65535 || true'
 ExecStop=/bin/sh -c 'ip link set can0 down 2>/dev/null || true; ip link set can1 down 2>/dev/null || true'
 
 [Install]
